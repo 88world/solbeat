@@ -42,9 +42,15 @@ export type HeatSnapshot = {
   sol: SolMacro | null;             // SOL price macro reference
 };
 
-const VOLATILITY_REF = 18;        // top-3 |%| at which volatility = 1
-const BREADTH_THRESHOLD = 3;      // % move that counts as "meaningful"
-const VOLUME_REF = 50_000_000;    // $50M total at which volume = 1 (log scale)
+// Recalibrated so BPM actually moves with market state instead of pegging at
+// max. Median-based volatility kills outlier saturation (one token at +287%
+// can't drive heat alone — the market has to be broadly active). Volume
+// reference raised from $50M → $250M because the trending list of 16 hot
+// Solana tokens routinely sums north of that. Breadth threshold raised so it
+// only counts meaningful moves.
+const VOLATILITY_REF = 8;         // median |%| at which volatility = 1
+const BREADTH_THRESHOLD = 5;      // % move that counts as "meaningful"
+const VOLUME_REF = 250_000_000;   // $250M total at which volume = 1 (log)
 const SENTIMENT_REF = 10;         // avg % at which sentiment saturates
 
 export function computeHeatSnapshot(
@@ -62,11 +68,17 @@ export function computeHeatSnapshot(
 
   if (changes.length === 0) return EMPTY_SNAPSHOT;
 
-  // ── Volatility: top-3 average of absolute changes ──
-  const sortedAbs = changes.map(Math.abs).sort((a, b) => b - a);
-  const top = sortedAbs.slice(0, Math.min(3, sortedAbs.length));
-  const top3Avg = top.reduce((s, n) => s + n, 0) / top.length;
-  const volatility = clamp01(top3Avg / VOLATILITY_REF);
+  // ── Volatility: median |%| ──
+  // Median is robust to outliers (one mooning token can't blow it up alone),
+  // so this only saturates when the *whole list* is moving. That's the right
+  // signal for "the market is hot" rather than "one coin pumped."
+  const sortedAbs = changes.map(Math.abs).sort((a, b) => a - b);
+  const mid = Math.floor(sortedAbs.length / 2);
+  const median =
+    sortedAbs.length % 2 === 0
+      ? (sortedAbs[mid - 1] + sortedAbs[mid]) / 2
+      : sortedAbs[mid];
+  const volatility = clamp01(median / VOLATILITY_REF);
 
   // ── Breadth: fraction of tokens with meaningful moves ──
   const moving = changes.filter((c) => Math.abs(c) > BREADTH_THRESHOLD).length;
@@ -80,7 +92,10 @@ export function computeHeatSnapshot(
       : 0;
 
   // ── Composite heat ──
-  const heat = clamp01(volatility * 0.5 + breadth * 0.3 + volume * 0.2);
+  // Weighted toward volatility because that's what degens *feel*. Breadth
+  // catches "everything's moving." Volume is the smallest weight — it
+  // saturates fastest (log scale) so it's a tiebreaker, not a primary signal.
+  const heat = clamp01(volatility * 0.55 + breadth * 0.30 + volume * 0.15);
 
   // ── Sentiment: average signed change ──
   const avgChange = changes.reduce((s, n) => s + n, 0) / changes.length;
@@ -134,9 +149,17 @@ const EMPTY_SNAPSHOT: HeatSnapshot = {
   sol: null,
 };
 
-/** BPM range now 50..100 (was 50..85) — wider so a hot market is meaningfully different. */
+/**
+ * BPM range 40..120. Wider than before so the gap between a calm market and
+ * an on-fire one is dramatic on the badge.
+ *   heat 0.1  → 48 BPM (Calm)
+ *   heat 0.3  → 64 BPM (Steady)
+ *   heat 0.5  → 80 BPM (Active)
+ *   heat 0.7  → 96 BPM (Hot)
+ *   heat 0.9  → 112 BPM (On fire)
+ */
 export function heatToBpm(heat: number): number {
-  return 50 + heat * 50;
+  return 40 + heat * 80;
 }
 
 export function heatLabel(

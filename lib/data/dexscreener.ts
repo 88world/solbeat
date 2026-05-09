@@ -131,8 +131,10 @@ export async function fetchTrending(): Promise<TrendingToken[]> {
     symbol: p.baseToken.symbol,
     name: p.baseToken.name,
     price_usd: parsePriceUsd(p.priceUsd),
+    price_change_1h: p.priceChange?.h1 ?? null,
     price_change_24h: p.priceChange?.h24 ?? null,
     volume_24h: p.volume?.h24 ?? null,
+    liquidity_usd: p.liquidity?.usd ?? null,
     image: p.info?.imageUrl ?? null,
   }));
 }

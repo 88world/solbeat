@@ -88,8 +88,10 @@ export type TrendingToken = {
   symbol: string;
   name: string | null;
   price_usd: number | null;
+  price_change_1h: number | null;
   price_change_24h: number | null;
   volume_24h: number | null;
+  liquidity_usd: number | null;
   image: string | null;
 };
 
