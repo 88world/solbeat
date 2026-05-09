@@ -2,10 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
 type Props = {
   size?: number;
@@ -14,10 +10,9 @@ type Props = {
 };
 
 /**
- * Bloomy heartbeat orb with an orbiting particle field. The body has
- * pink→purple body shading with a green shimmer at the heartbeat peak,
- * and UnrealBloom over the whole scene gives it a real "light source"
- * feel rather than a flat colored shape.
+ * Heartbeat orb: pink→purple body with a green shimmer at the heartbeat peak,
+ * inner rim highlight, soft additive halo, and a 900-particle orbital shell.
+ * Direct renderer — no postprocessing — so it stays consistent across GPUs.
  */
 export function PulseSphere({ size = 240, bpm = 50 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -33,13 +28,15 @@ export function PulseSphere({ size = 240, bpm = 50 }: Props) {
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const dpr = Math.min(window.devicePixelRatio, 2);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      premultipliedAlpha: false,
+    });
     renderer.setPixelRatio(dpr);
     renderer.setSize(size, size, false);
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -135,7 +132,6 @@ export function PulseSphere({ size = 240, bpm = 50 }: Props) {
         varying vec3 vViewDir;
         varying float vDisp;
 
-        // Simple hash for dither
         float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
         void main(){
@@ -146,16 +142,13 @@ export function PulseSphere({ size = 240, bpm = 50 }: Props) {
           vec3 col = mix(uColorMid, uColorCore, fres);
           col = mix(uColorDeep, col, smoothstep(-0.2, 0.7, ndotl + fres * 0.5));
 
-          // Heartbeat shimmer with green accent on the peak
           float shimmer = smoothstep(0.35, 0.95, vDisp) * uPulse;
           col = mix(col, uColorAccent, shimmer * 0.5);
 
-          // Top-light hot spot
           float topLight = pow(clamp(vNormal.y * 0.5 + 0.5, 0.0, 1.0), 5.0);
-          col += topLight * uColorCore * 0.45;
+          col += topLight * uColorCore * 0.4;
 
-          // Pulse-driven exposure lift — pushed past 1.0 for bloom to grab.
-          col *= (0.95 + uPulse * 0.85);
+          col *= (0.95 + uPulse * 0.55);
 
           // 8-bit dither to kill banding
           float d = (hash(gl_FragCoord.xy) - 0.5) / 255.0;
@@ -168,8 +161,35 @@ export function PulseSphere({ size = 240, bpm = 50 }: Props) {
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
 
-    // ───── Soft halo ─────
-    const haloGeo = new THREE.SphereGeometry(1.55, 64, 64);
+    // ───── Inner rim highlight (additive front-side limb) ─────
+    const limbGeo = new THREE.SphereGeometry(1.05, 64, 64);
+    const limbMat = new THREE.ShaderMaterial({
+      uniforms: { uPulse: uniforms.uPulse },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexShader: `
+        varying vec3 vN;
+        void main(){
+          vN = normalize(normalMatrix * normal);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        uniform float uPulse;
+        varying vec3 vN;
+        void main(){
+          float ndotl = clamp(dot(vN, vec3(0.0, 0.0, 1.0)), 0.0, 1.0);
+          float rim = pow(1.0 - ndotl, 4.5);
+          gl_FragColor = vec4(vec3(1.0, 0.45, 0.78), rim * (0.5 + uPulse * 0.45));
+        }
+      `,
+    });
+    scene.add(new THREE.Mesh(limbGeo, limbMat));
+
+    // ───── Outer halo ─────
+    const haloGeo = new THREE.SphereGeometry(1.7, 64, 64);
     const haloMat = new THREE.ShaderMaterial({
       uniforms: { uPulse: uniforms.uPulse },
       transparent: true,
@@ -190,26 +210,25 @@ export function PulseSphere({ size = 240, bpm = 50 }: Props) {
         void main(){
           float f = pow(1.0 - abs(vN.z), 3.0);
           vec3 col = mix(vec3(0.6, 0.27, 1.0), vec3(1.0, 0.18, 0.61), 0.55);
-          gl_FragColor = vec4(col * 1.4, f * (0.18 + uPulse * 0.32));
+          gl_FragColor = vec4(col, f * (0.20 + uPulse * 0.30));
         }
       `,
     });
     scene.add(new THREE.Mesh(haloGeo, haloMat));
 
     // ───── Particle field (orbital shell) ─────
-    const PARTICLE_COUNT = 900;
+    const PARTICLE_COUNT = 700;
     const positions = new Float32Array(PARTICLE_COUNT * 3);
     const sizes = new Float32Array(PARTICLE_COUNT);
     const seeds = new Float32Array(PARTICLE_COUNT);
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-      // Spherical shell radius 1.6–3.2 with bias toward inner
-      const r = 1.6 + Math.pow(Math.random(), 1.6) * 1.6;
+      const r = 1.7 + Math.pow(Math.random(), 1.6) * 1.6;
       const phi = Math.acos(2 * Math.random() - 1);
       const theta = Math.random() * Math.PI * 2;
       positions[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta);
       positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       positions[i * 3 + 2] = r * Math.cos(phi);
-      sizes[i] = 0.5 + Math.random() * 2.2;
+      sizes[i] = 0.6 + Math.random() * 1.8;
       seeds[i] = Math.random() * 6.28;
     }
     const partGeo = new THREE.BufferGeometry();
@@ -236,24 +255,22 @@ export function PulseSphere({ size = 240, bpm = 50 }: Props) {
         varying vec3 vCol;
         void main(){
           vec3 pos = position;
-          // Twinkle factor: per-particle phase
           float tw = 0.5 + 0.5 * sin(uTime * 2.0 + aSeed * 3.0);
-          vAlpha = mix(0.25, 1.0, tw);
+          vAlpha = mix(0.2, 0.85, tw);
 
-          // Color: pink near center, purple farther, green sparkle on pulse
           float dist = length(pos);
-          float t = smoothstep(1.6, 3.2, dist);
-          vec3 c1 = vec3(1.0, 0.18, 0.61);  // pink
-          vec3 c2 = vec3(0.6, 0.27, 1.0);   // purple
+          float t = smoothstep(1.7, 3.3, dist);
+          vec3 c1 = vec3(1.0, 0.18, 0.61);
+          vec3 c2 = vec3(0.6, 0.27, 1.0);
           vec3 cAccent = vec3(0.08, 0.95, 0.58);
           vec3 col = mix(c1, c2, t);
           col = mix(col, cAccent, uPulse * 0.4 * step(2.6, dist));
-          vCol = col * (1.2 + uPulse * 0.8);
+          vCol = col;
 
           vec4 mv = modelViewMatrix * vec4(pos, 1.0);
           gl_Position = projectionMatrix * mv;
-          float pulseSize = 1.0 + uPulse * 0.6;
-          gl_PointSize = aSize * uPixelRatio * pulseSize * (320.0 / -mv.z);
+          float pulseSize = 1.0 + uPulse * 0.55;
+          gl_PointSize = aSize * uPixelRatio * pulseSize * (300.0 / -mv.z);
         }
       `,
       fragmentShader: `
@@ -261,7 +278,6 @@ export function PulseSphere({ size = 240, bpm = 50 }: Props) {
         varying float vAlpha;
         varying vec3 vCol;
         void main(){
-          // Soft circular point with smooth falloff
           vec2 uv = gl_PointCoord - 0.5;
           float d = length(uv);
           float a = smoothstep(0.5, 0.0, d);
@@ -271,20 +287,6 @@ export function PulseSphere({ size = 240, bpm = 50 }: Props) {
     });
     const particles = new THREE.Points(partGeo, partMat);
     scene.add(particles);
-
-    // ───── Post-processing: bloom ─────
-    const composer = new EffectComposer(renderer);
-    composer.setSize(size, size);
-    composer.setPixelRatio(dpr);
-    composer.addPass(new RenderPass(scene, camera));
-    const bloom = new UnrealBloomPass(
-      new THREE.Vector2(size, size),
-      1.05, // strength
-      0.55, // radius
-      0.18, // threshold — lower means more pixels qualify for bloom
-    );
-    composer.addPass(bloom);
-    composer.addPass(new OutputPass());
 
     // ───── Animation loop ─────
     let raf = 0;
@@ -315,7 +317,6 @@ export function PulseSphere({ size = 240, bpm = 50 }: Props) {
       const period = 60 / bpmRef.current;
       phase += dt / period;
       const t = phase % 1;
-      // Lub-dub
       const beat =
         Math.exp(-Math.pow((t - 0.08) * 11, 2)) * 1.0 +
         Math.exp(-Math.pow((t - 0.22) * 16, 2)) * 0.5;
@@ -326,12 +327,11 @@ export function PulseSphere({ size = 240, bpm = 50 }: Props) {
       particles.rotation.y -= dt * 0.04;
       particles.rotation.x += dt * 0.015;
 
-      // Subtle parallax toward mouse
       camera.position.x += (mouseX * 0.18 - camera.position.x) * 0.05;
       camera.position.y += (-mouseY * 0.18 - camera.position.y) * 0.05;
       camera.lookAt(0, 0, 0);
 
-      composer.render();
+      renderer.render(scene, camera);
     };
     raf = requestAnimationFrame(tick);
 
@@ -339,12 +339,13 @@ export function PulseSphere({ size = 240, bpm = 50 }: Props) {
       cancelAnimationFrame(raf);
       window.removeEventListener("mousemove", onMove);
       document.removeEventListener("visibilitychange", onVis);
-      composer.dispose();
       renderer.dispose();
       geometry.dispose();
+      limbGeo.dispose();
       haloGeo.dispose();
       partGeo.dispose();
       material.dispose();
+      limbMat.dispose();
       haloMat.dispose();
       partMat.dispose();
       if (renderer.domElement.parentNode === mount) {

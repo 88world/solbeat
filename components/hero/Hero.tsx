@@ -43,27 +43,27 @@ export function Hero() {
     const root = heroRef.current;
     if (!root) return;
 
-    animate(root.querySelectorAll("[data-fade-up]"), {
-      opacity: [0, 1],
-      translateY: [16, 0],
-      duration: 700,
-      delay: stagger(120, { start: 100 }),
-      ease: "out(3)",
-    });
-    animate(root.querySelectorAll("[data-sphere-in]"), {
-      opacity: [0, 1],
-      scale: [0.8, 1],
-      duration: 1200,
-      delay: 50,
-      ease: "out(4)",
-    });
-    animate(root.querySelectorAll("[data-ticker-in]"), {
-      opacity: [0, 1],
-      scale: [0.5, 1],
-      duration: 700,
-      delay: stagger(40, { start: 400, from: "first" }),
-      ease: "out(3)",
-    });
+    const fadeUp = root.querySelectorAll("[data-fade-up]");
+    if (fadeUp.length) {
+      animate(fadeUp, {
+        opacity: [0, 1],
+        translateY: [16, 0],
+        duration: 700,
+        delay: stagger(120, { start: 100 }),
+        ease: "out(3)",
+      });
+    }
+    const sphereIn = root.querySelectorAll("[data-sphere-in]");
+    if (sphereIn.length) {
+      animate(sphereIn, {
+        opacity: [0, 1],
+        scale: [0.8, 1],
+        duration: 1200,
+        delay: 50,
+        ease: "out(4)",
+      });
+    }
+    // Ticker entrance is owned by TrendingRing — it knows when data lands.
   }, []);
 
   return (
@@ -103,20 +103,18 @@ export function Hero() {
             className="font-semibold tracking-[-0.04em] leading-[1.02] text-[clamp(2rem,4.6vw,3.75rem)]"
             style={{ textShadow: "0 0 30px rgba(10, 10, 15, 0.85)" }}
           >
-            <span className="text-text-primary">The pulse of every</span>
-            <br />
+            <span className="text-text-primary">The pulse of every</span>{" "}
             <span className="bg-gradient-to-r from-accent-pulse via-accent-primary to-accent-secondary bg-clip-text text-transparent">
-              Solana token
-            </span>
-            <span className="text-text-secondary font-light italic">
-              {" "}— in plain English.
+              Solana token.
             </span>
           </h1>
           <p
             data-fade-up
-            className="mt-3 text-text-muted text-[12px] sm:text-[13px]"
+            className="mt-4 text-text-secondary text-[13px] sm:text-[14px] leading-relaxed"
           >
-            On-chain data + X sentiment + recent catalysts, synthesized by AI in one paragraph.
+            On-chain data, X sentiment, and recent catalysts —
+            <br className="hidden sm:inline" />
+            synthesized by AI into one read.
           </p>
         </div>
 

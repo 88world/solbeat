@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { animate, stagger } from "animejs";
 import Link from "next/link";
 import type { TrendingToken } from "@/types/token";
 import { pctChange } from "@/lib/utils";
@@ -12,6 +13,8 @@ type Props = {
 export function TrendingRing({ radius = 380 }: Props) {
   const [tokens, setTokens] = useState<TrendingToken[]>([]);
   const [paused, setPaused] = useState(false);
+  const ringRef = useRef<HTMLDivElement>(null);
+  const animatedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,11 +36,30 @@ export function TrendingRing({ radius = 380 }: Props) {
     };
   }, []);
 
+  // Entrance: stagger the chips into view once data lands. Runs once.
+  useEffect(() => {
+    if (animatedRef.current) return;
+    if (tokens.length === 0) return;
+    const root = ringRef.current;
+    if (!root) return;
+    const chips = root.querySelectorAll("[data-ticker-in]");
+    if (!chips.length) return;
+    animatedRef.current = true;
+    animate(chips, {
+      opacity: [0, 1],
+      scale: [0.6, 1],
+      duration: 700,
+      delay: stagger(45, { start: 200 }),
+      ease: "out(3)",
+    });
+  }, [tokens]);
+
   const count = tokens.length;
   const dim = radius * 2;
 
   return (
     <div
+      ref={ringRef}
       className="relative pointer-events-none"
       style={{ width: dim, height: dim }}
     >
