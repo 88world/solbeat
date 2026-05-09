@@ -41,59 +41,109 @@ export async function fetchBestSolanaPair(mint: string): Promise<DexPair | null>
     .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
 }
 
-// Solana liquid + memecoin staples. We resolve their live market data each
-// time. This is a curated list rather than a "trending" feed because
-// DexScreener's search endpoint returns name-collision noise (imposter SOLs)
-// when queried broadly, and the hero ring should always show recognizable
-// tickers.
-const TRENDING_SEEDS = [
+// Real-time trending. DexScreener's search endpoint matches on the dexId
+// field, so querying DEX names (raydium, meteora, pump, orca) returns the
+// actual high-volume pairs on those AMMs. Combine the queries, filter for
+// Solana base-tokens trading against SOL/USDC, dedupe per base mint, rank
+// by 24h volume.
+//
+// The previous q=SOL approach returned imposter tokens whose symbol is
+// "SOL" (different mints, same string). This DEX-targeted approach gives
+// us aura ($27M), RAY ($4M), ZEREBRO ($3M), GIGA ($1.4M) — actual movers.
+
+const SOL_MINT = "So11111111111111111111111111111111111111112";
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
+const SKIP_BASE_MINTS = new Set([SOL_MINT, USDC_MINT, USDT_MINT]);
+// Symbols imposter tokens like to use — exclude these as base tokens.
+const SKIP_BASE_SYMBOLS = new Set([
+  "SOL", "WSOL", "USDC", "USDT", "USDE", "DAI",
+]);
+const ACCEPTED_QUOTES = new Set(["SOL", "WSOL", "USDC"]);
+const MIN_VOLUME_24H = 100_000;
+
+const TRENDING_FALLBACK_SEEDS = [
   "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", // BONK
   "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", // WIF
   "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", // JUP
   "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL", // JTO
   "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R", // RAY
   "MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5", // MEW
-  "2qEHjDLDLbuBgRYvsxhc5D6uDWAivNFZGan56P1tpump", // PNUT
-  "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr", // POPCAT
-  "5z3EqYQo9HiCEs3R84RCDMu2n7anpDMxRhdK8PSWmrRC", // PONKE
-  "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3", // PYTH
-  "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof", // RENDER
-  "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4", // JLP
-  "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", // USDT
-  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC
 ];
 
 export async function fetchTrending(): Promise<TrendingToken[]> {
-  // DexScreener accepts up to 30 token addresses comma-separated.
-  const url = `${BASE}/latest/dex/tokens/${TRENDING_SEEDS.join(",")}`;
-  const r = await fetch(url, { next: { revalidate: 60 } });
-  if (!r.ok) return [];
-  const json = (await r.json()) as DexSearchResponse;
-  const all = (json.pairs ?? []).filter((p) => p.chainId === "solana");
+  const collected: DexPair[] = [];
 
-  // Pick the deepest pair per base token.
+  // Querying DEX names returns pairs with that dexId — high-volume Solana pools.
+  const queries = ["raydium", "meteora", "pump", "orca"];
+  const responses = await Promise.all(
+    queries.map((q) =>
+      fetch(`${BASE}/latest/dex/search?q=${encodeURIComponent(q)}`, {
+        next: { revalidate: 60 },
+      })
+        .then((r) => (r.ok ? (r.json() as Promise<DexSearchResponse>) : null))
+        .catch(() => null),
+    ),
+  );
+  for (const json of responses) {
+    if (json?.pairs) collected.push(...json.pairs);
+  }
+
+  const filtered = collected.filter((p) => {
+    if (p.chainId !== "solana") return false;
+    if (SKIP_BASE_MINTS.has(p.baseToken.address)) return false;
+    const baseSym = (p.baseToken.symbol ?? "").toUpperCase();
+    if (SKIP_BASE_SYMBOLS.has(baseSym)) return false;
+    const quoteSym = (p.quoteToken.symbol ?? "").toUpperCase();
+    if (!ACCEPTED_QUOTES.has(quoteSym)) return false;
+    const vol = p.volume?.h24 ?? 0;
+    if (vol < MIN_VOLUME_24H) return false;
+    return true;
+  });
+
+  // Dedupe per base token — keep the pair with the highest 24h volume.
   const byToken = new Map<string, DexPair>();
-  for (const p of all) {
+  for (const p of filtered) {
     const existing = byToken.get(p.baseToken.address);
-    if (!existing || (p.liquidity?.usd ?? 0) > (existing.liquidity?.usd ?? 0)) {
+    if (!existing || (p.volume?.h24 ?? 0) > (existing.volume?.h24 ?? 0)) {
       byToken.set(p.baseToken.address, p);
     }
   }
 
-  const tokens = Array.from(byToken.values())
-    .sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0))
-    .slice(0, LIMITS.TRENDING_RING_COUNT)
-    .map<TrendingToken>((p) => ({
-      ca: p.baseToken.address,
-      symbol: p.baseToken.symbol,
-      name: p.baseToken.name,
-      price_usd: parsePriceUsd(p.priceUsd),
-      price_change_24h: p.priceChange?.h24 ?? null,
-      volume_24h: p.volume?.h24 ?? null,
-      image: p.info?.imageUrl ?? null,
-    }));
+  const ranked = Array.from(byToken.values()).sort(
+    (a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0),
+  );
 
-  return tokens;
+  // Belt-and-suspenders: if search returned almost nothing, mix in staple seeds.
+  if (ranked.length < 6) {
+    const fallback = await fetchPairsByMints(TRENDING_FALLBACK_SEEDS);
+    for (const p of fallback) {
+      if (!byToken.has(p.baseToken.address)) {
+        ranked.push(p);
+        byToken.set(p.baseToken.address, p);
+      }
+    }
+    ranked.sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
+  }
+
+  return ranked.slice(0, LIMITS.TRENDING_RING_COUNT).map<TrendingToken>((p) => ({
+    ca: p.baseToken.address,
+    symbol: p.baseToken.symbol,
+    name: p.baseToken.name,
+    price_usd: parsePriceUsd(p.priceUsd),
+    price_change_24h: p.priceChange?.h24 ?? null,
+    volume_24h: p.volume?.h24 ?? null,
+    image: p.info?.imageUrl ?? null,
+  }));
+}
+
+async function fetchPairsByMints(mints: string[]): Promise<DexPair[]> {
+  if (mints.length === 0) return [];
+  const url = `${BASE}/latest/dex/tokens/${mints.join(",")}`;
+  const r = await fetch(url, { next: { revalidate: 60 } });
+  if (!r.ok) return [];
+  const json = (await r.json()) as DexSearchResponse;
+  return (json.pairs ?? []).filter((p) => p.chainId === "solana");
 }
 
 function parsePriceUsd(s: string | undefined): number | null {
