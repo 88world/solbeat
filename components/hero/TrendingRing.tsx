@@ -9,7 +9,7 @@ type Props = {
   radius?: number;
 };
 
-export function TrendingRing({ radius = 360 }: Props) {
+export function TrendingRing({ radius = 380 }: Props) {
   const [tokens, setTokens] = useState<TrendingToken[]>([]);
   const [paused, setPaused] = useState(false);
 
@@ -34,30 +34,26 @@ export function TrendingRing({ radius = 360 }: Props) {
   }, []);
 
   const count = tokens.length;
-  const ringStyle: React.CSSProperties = {
-    width: radius * 2,
-    height: radius * 2,
-    animationPlayState: paused ? "paused" : "running",
-  };
+  const dim = radius * 2;
 
   return (
     <div
-      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-      style={{ width: radius * 2, height: radius * 2 }}
+      className="relative pointer-events-none"
+      style={{ width: dim, height: dim }}
     >
-      {/* Background concentric rings */}
+      {/* Concentric guides */}
       <svg
         className="absolute inset-0"
         width="100%"
         height="100%"
-        viewBox={`0 0 ${radius * 2} ${radius * 2}`}
+        viewBox={`0 0 ${dim} ${dim}`}
         aria-hidden
       >
         <defs>
           <radialGradient id="ring-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="60%" stopColor="rgba(153,69,255,0)" />
-            <stop offset="85%" stopColor="rgba(153,69,255,0.10)" />
-            <stop offset="100%" stopColor="rgba(153,69,255,0)" />
+            <stop offset="62%" stopColor="rgba(153,69,255,0)" />
+            <stop offset="86%" stopColor="rgba(153,69,255,0.05)" />
+            <stop offset="100%" stopColor="rgba(255,45,156,0.04)" />
           </radialGradient>
         </defs>
         <circle
@@ -71,11 +67,11 @@ export function TrendingRing({ radius = 360 }: Props) {
         <circle
           cx={radius}
           cy={radius}
-          r={radius - 60}
+          r={radius - 80}
           fill="none"
-          stroke="rgba(255,255,255,0.05)"
+          stroke="rgba(255,255,255,0.04)"
           strokeWidth="1"
-          strokeDasharray="2 6"
+          strokeDasharray="2 8"
         />
         <circle cx={radius} cy={radius} r={radius} fill="url(#ring-glow)" />
       </svg>
@@ -84,8 +80,9 @@ export function TrendingRing({ radius = 360 }: Props) {
       <div
         className="absolute inset-0 pointer-events-auto"
         style={{
-          ...ringStyle,
-          animation: "orbit 60s linear infinite",
+          width: dim,
+          height: dim,
+          animation: "orbit 80s linear infinite",
           animationPlayState: paused ? "paused" : "running",
         }}
         onMouseEnter={() => setPaused(true)}
@@ -100,7 +97,7 @@ export function TrendingRing({ radius = 360 }: Props) {
               <Link
                 key={t.ca}
                 href={`/token/${t.ca}`}
-                className="absolute group"
+                className="absolute"
                 style={{
                   left: x,
                   top: y,
@@ -108,9 +105,8 @@ export function TrendingRing({ radius = 360 }: Props) {
                 }}
               >
                 <div
-                  className="flex flex-col items-center gap-1 transition-all"
                   style={{
-                    animation: "orbit-reverse 60s linear infinite",
+                    animation: "orbit-reverse 80s linear infinite",
                     animationPlayState: paused ? "paused" : "running",
                   }}
                 >
@@ -122,11 +118,7 @@ export function TrendingRing({ radius = 360 }: Props) {
       </div>
 
       {count === 0 && (
-        <div
-          className="absolute inset-0 pointer-events-none flex items-center justify-center"
-          aria-hidden
-        >
-          {/* Show 12 placeholder dots while loading */}
+        <div className="absolute inset-0 pointer-events-none" aria-hidden>
           {Array.from({ length: 12 }).map((_, i) => {
             const angle = (i / 12) * Math.PI * 2 - Math.PI / 2;
             const x = Math.cos(angle) * radius + radius;
@@ -148,16 +140,67 @@ export function TrendingRing({ radius = 360 }: Props) {
 function TickerChip({ token }: { token: TrendingToken }) {
   const change = token.price_change_24h ?? 0;
   const positive = change >= 0;
+  const symbol = (token.symbol ?? "").replace(/^\$/, "").toUpperCase();
   return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 glass rounded-full text-[11px] font-medium hover:scale-110 transition-transform shadow-[0_4px_24px_rgba(0,0,0,0.4)]">
-      <span className="text-text-primary">${token.symbol}</span>
+    <div
+      className="group flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border border-white/[0.08] hover:border-white/20 hover:scale-[1.06] hover:shadow-[0_8px_30px_rgba(255,45,156,0.22)] transition-all duration-300"
+      style={{
+        background: "rgba(18, 18, 26, 0.78)",
+        backdropFilter: "blur(16px) saturate(140%)",
+        WebkitBackdropFilter: "blur(16px) saturate(140%)",
+        boxShadow: "0 4px 20px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
+      }}
+    >
+      <TokenAvatar image={token.image} symbol={symbol} />
+      <span className="text-[12px] font-semibold text-text-primary tracking-tight">
+        {symbol}
+      </span>
       <span
-        className={
-          positive ? "text-signal-positive text-[10px]" : "text-signal-negative text-[10px]"
-        }
+        className={`text-[10.5px] font-medium text-mono ${
+          positive ? "text-signal-positive" : "text-signal-negative"
+        }`}
       >
         {pctChange(change)}
       </span>
     </div>
+  );
+}
+
+function TokenAvatar({
+  image,
+  symbol,
+}: {
+  image: string | null;
+  symbol: string;
+}) {
+  if (image) {
+    return (
+      <span className="relative size-5 rounded-full overflow-hidden bg-white/5 shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={image}
+          alt=""
+          className="size-full object-cover"
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          onError={(e) => {
+            // Hide broken image; the gradient fallback below takes over via parent.
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
+      </span>
+    );
+  }
+  // Fallback: gradient orb with first letter of symbol.
+  return (
+    <span
+      className="size-5 rounded-full shrink-0 flex items-center justify-center text-[8px] font-semibold text-white/90"
+      style={{
+        background:
+          "linear-gradient(135deg, #ff2d9c 0%, #9945ff 50%, #14f195 100%)",
+      }}
+    >
+      {symbol.slice(0, 1)}
+    </span>
   );
 }
