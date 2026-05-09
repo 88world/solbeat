@@ -6,7 +6,7 @@ import type { TrendingToken } from "@/types/token";
 
 type Props = {
   size?: number;
-  /** Market heat (0..1). Drives core sphere color and ambient feel. */
+  /** Market heat (0..1). Drives core sphere color, breath rate, ring spin. */
   heat?: number;
   /** Live trending tokens — rendered as orbiting satellites. */
   tokens?: TrendingToken[];
@@ -15,23 +15,28 @@ type Props = {
 };
 
 /**
- * The Pulse — a living, interactive market visualizer.
+ * The Pulse — living, interactive market visualizer.
  *
- *   Core sphere: shape + heat-driven color (this part unchanged from before).
- *   Orbiting token satellites: each trending token is a billboarded sprite
- *     with its logo, a colored ring (green up / red down), and a symbol label,
- *     drawn into a CanvasTexture and async-loaded on mount or when the token
- *     list changes.
+ *   Core sphere: high-poly icosphere with a thermal liquid shader. Breath is
+ *   driven by a continuous sine wave at the BPM rate (no exponential snap),
+ *   color blends cold-blue → hot-pink across the heat range, fresnel pow(2.5)
+ *   gives a strong rim glow that breaks the "matte plastic" look, soft
+ *   specular at exp 8 keeps the highlight broad without aliasing, and the
+ *   body alpha is 0.7 + fres × 0.3 so the center is glassy and the rim is
+ *   opaque — reads as real glass on a light bg.
  *
- *   Per-token heat (volatility 60% + volume rank 40%) determines:
- *     - orbitRadius (hotter = closer to the sphere)
- *     - orbitSpeed  (hotter = faster angular velocity)
- *     - spriteScale (hotter = bigger sprite)
- *     - emissive boost on the ring (hotter = more glow)
+ *   Data rings: two abstract Torus rings at different inclinations, spinning
+ *   with heat. Premium tech-orbit feel.
  *
- *   Each satellite has a randomly-tilted orbit plane so the system reads as
- *   a 3D constellation, not a flat ring. Raycaster handles hover (scale-up
- *   tween) and click (navigates to /token/[ca]).
+ *   Token satellites: each trending token is a billboarded sprite — circular
+ *   logo with a thin colored ring (no white plate; the plate was clashing
+ *   with the light bg). Symbol rendered with a soft white halo for legibility.
+ *
+ *   Per-token heat (volatility 60% + volume rank 40%) drives orbit radius,
+ *   speed, sprite scale.
+ *
+ *   Pulse shockwaves expand at the BPM cadence. Comet trails follow each
+ *   satellite. Raycaster handles hover (scale-up) + click (navigate).
  */
 export function PulseSphere({
   size = 480,
@@ -40,18 +45,12 @@ export function PulseSphere({
   onTokenClick,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
-
-  // Refs so the animation loop can read the latest props without re-running.
   const heatRef = useRef(heat);
   heatRef.current = heat;
   const onClickRef = useRef(onTokenClick);
   onClickRef.current = onTokenClick;
-
-  // The rebuild function lives in this ref — set during scene setup, called
-  // by the tokens-changed effect below.
   const rebuildRef = useRef<((toks: TrendingToken[]) => void) | null>(null);
 
-  // ───── Scene setup (runs once per size change) ─────
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
@@ -73,17 +72,17 @@ export function PulseSphere({
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    // Pulled the camera back to fit the orbital satellites in frame alongside
-    // the central sphere. Sphere appears smaller than before but in proportion.
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
-    camera.position.set(0, 0, 5.6);
+    camera.position.set(0, 0, 5.4);
 
-    const geometry = new THREE.IcosahedronGeometry(1, 32);
+    // ───── Core sphere ─────
+    const geometry = new THREE.IcosahedronGeometry(1, 96);
 
     const uniforms = {
-      uTime: { value: 0 },
-      uHeat: { value: 0 },
-      uHover: { value: 0 },
+      uTime:   { value: 0 },
+      uHeat:   { value: 0 },
+      uBreath: { value: 0 },
+      uHover:  { value: 0 },
     };
 
     const material = new THREE.ShaderMaterial({
@@ -95,11 +94,36 @@ export function PulseSphere({
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
 
-    // ───── Pulse shockwaves ─────
-    // 3 thin torus rings expanding from the center sphere outward at the
-    // BPM rate. Each ring has its own phase, evenly staggered, so the
-    // visualization feels like a continuous heartbeat ripple. Opacity fades
-    // as the ring expands, scale grows from 1.0 → ~4.5.
+    // ───── Abstract data rings (premium tech-orbit decoration) ─────
+    const ringGroup = new THREE.Group();
+    scene.add(ringGroup);
+
+    const ringGeoOuter = new THREE.TorusGeometry(1.55, 0.0035, 8, 128);
+    const ringMatOuter = new THREE.MeshBasicMaterial({
+      color: 0x5e5cff,
+      transparent: true,
+      opacity: 0.22,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const ringOuter = new THREE.Mesh(ringGeoOuter, ringMatOuter);
+    ringOuter.rotation.x = Math.PI / 2;
+    ringGroup.add(ringOuter);
+
+    const ringGeoInner = new THREE.TorusGeometry(1.22, 0.005, 8, 128);
+    const ringMatInner = new THREE.MeshBasicMaterial({
+      color: 0xff2d9c,
+      transparent: true,
+      opacity: 0.18,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const ringInner = new THREE.Mesh(ringGeoInner, ringMatInner);
+    ringInner.rotation.x = Math.PI / 3;
+    ringInner.rotation.y = Math.PI / 4;
+    ringGroup.add(ringInner);
+
+    // ───── Pulse shockwaves (3 phase-staggered rings) ─────
     const SHOCKWAVE_COUNT = 3;
     const shockwaveGeo = new THREE.TorusGeometry(1, 0.012, 8, 96);
     const shockwaves: { mesh: THREE.Mesh; phase: number }[] = [];
@@ -174,8 +198,7 @@ export function PulseSphere({
           varying float vAlpha;
           void main(){
             vec2 uv = gl_PointCoord - 0.5;
-            float d = length(uv);
-            float a = smoothstep(0.5, 0.0, d) * vAlpha * vAlpha;
+            float a = smoothstep(0.5, 0.0, length(uv)) * vAlpha * vAlpha;
             gl_FragColor = vec4(uColor, a * 0.85);
           }
         `,
@@ -185,19 +208,14 @@ export function PulseSphere({
     }
 
     const ringSatellite = (token: TrendingToken, idx: number, total: number) => {
-      // Per-token heat: volatility (|24h%| / 18) blended with volume rank.
       const change = token.price_change_24h ?? 0;
       const volHeat = Math.min(1, Math.abs(change) / 18);
       const rankHeat = total > 1 ? 1 - idx / (total - 1) : 0.5;
       const tHeat = volHeat * 0.6 + rankHeat * 0.4;
-
-      const orbitRadius = 3.5 - tHeat * 1.5; // 2.0 (hot) → 3.5 (cool)
+      const orbitRadius = 3.5 - tHeat * 1.5;
       const orbitSpeed = (0.04 + tHeat * 0.16) * (Math.random() < 0.5 ? 1 : -1);
       const baseScale = 0.30 + tHeat * 0.22;
-
       const ringColor = change >= 0 ? "#14F195" : "#FF4757";
-
-      // Random orbit plane (small tilts so the system reads 3D, not flat).
       const tilt = new THREE.Quaternion();
       const axis = new THREE.Vector3(
         (Math.random() - 0.5) * 0.6,
@@ -205,7 +223,6 @@ export function PulseSphere({
         (Math.random() - 0.5) * 0.6,
       ).normalize();
       tilt.setFromAxisAngle(axis, (Math.random() - 0.5) * 0.8);
-
       return {
         ca: token.ca,
         symbol: (token.symbol ?? "").replace(/^\$/, "").toUpperCase(),
@@ -245,7 +262,6 @@ export function PulseSphere({
             map: texture,
             transparent: true,
             depthWrite: false,
-            // Slight additive feel so satellites pop against the bg.
             blending: THREE.NormalBlending,
           });
           const sprite = new THREE.Sprite(mat) as Satellite;
@@ -288,9 +304,7 @@ export function PulseSphere({
       targetHover = pointerInside ? 1 - Math.min(1, Math.hypot(pointer.x, pointer.y)) : 0;
     };
 
-    const onPointerMove = (e: PointerEvent) => {
-      updatePointer(e);
-    };
+    const onPointerMove = (e: PointerEvent) => updatePointer(e);
     const onPointerLeave = () => {
       pointerInside = false;
       targetHover = 0;
@@ -335,30 +349,43 @@ export function PulseSphere({
 
       uniforms.uTime.value += dt;
 
+      // Heat lerp — ambient drift toward target
       const targetHeat = Math.max(0, Math.min(1, heatRef.current));
       currentHeat += (targetHeat - currentHeat) * Math.min(1, dt * 0.55);
       uniforms.uHeat.value = reduced ? Math.min(0.4, currentHeat) : currentHeat;
 
+      // ───── Smooth sine-wave breath ─────
+      // Period derived from BPM. No exponential snap — pure sine, never jarring.
+      // BPM = 50 + heat * 50 (matches lib/utils/heat.ts heatToBpm).
+      const bpm = 50 + currentHeat * 50;
+      const bps = bpm / 60;
+      const breathRaw = (Math.sin((now / 1000) * Math.PI * bps * 2) + 1) * 0.5;
+      uniforms.uBreath.value = reduced ? 0.15 : breathRaw;
+
+      // Hover lerp (visual lift only)
       currentHover += (targetHover - currentHover) * Math.min(1, dt * 1.8);
       uniforms.uHover.value = currentHover;
 
-      // Tiny spin on the core sphere
+      // Core sphere idle motion
       mesh.rotation.y += dt * (0.05 + currentHeat * 0.02);
       mesh.rotation.x += dt * 0.012;
       mesh.position.y = Math.sin(now / 2400) * 0.045;
 
-      // Advance pulse shockwaves at the live BPM rate.
-      // BPM = 50 + heat * 50 (matches lib/utils/heat.ts heatToBpm)
-      const bpm = 50 + currentHeat * 50;
+      // Data rings — spin faster when hot
+      const ringSpin = 0.06 + currentHeat * 0.30;
+      ringOuter.rotation.z -= dt * ringSpin;
+      ringInner.rotation.z += dt * ringSpin * 1.5;
+      ringInner.rotation.x += dt * 0.05;
+      ringGroup.position.y = mesh.position.y;
+
+      // Shockwaves at BPM cadence
       const shockPeriod = 60 / Math.max(20, bpm);
       const phaseInc = dt / (shockPeriod * SHOCKWAVE_COUNT);
       for (const sw of shockwaves) {
         sw.phase = (sw.phase + phaseInc) % 1;
-        const scale = 1.0 + sw.phase * 3.6;
-        sw.mesh.scale.setScalar(scale);
+        sw.mesh.scale.setScalar(1.0 + sw.phase * 3.6);
         const mat = sw.mesh.material as THREE.MeshBasicMaterial;
-        mat.opacity = Math.max(0, (1 - sw.phase) * (1 - sw.phase) * 0.45);
-        // Color tilts pink when hot, blue when cool — matches sphere palette.
+        mat.opacity = Math.max(0, (1 - sw.phase) * (1 - sw.phase) * 0.4);
         mat.color.setRGB(
           1.0 - 0.65 * (1 - currentHeat),
           0.18 + 0.18 * (1 - currentHeat),
@@ -366,18 +393,16 @@ export function PulseSphere({
         );
       }
 
-      // Animate satellites + write trail positions
+      // Satellites + trails
       let nextHovered: Satellite | null = null;
       for (const sat of satellites) {
         const u = sat.userData;
         const t = uniforms.uTime.value * u.orbitSpeed + u.phase;
         tmpVec.set(Math.cos(t) * u.orbitRadius, 0, Math.sin(t) * u.orbitRadius);
-        // Gentle vertical bob layered on top
         tmpVec.y = Math.sin(uniforms.uTime.value * 0.6 + u.phase) * 0.18;
         tmpVec.applyQuaternion(u.orbitTilt);
         sat.position.copy(tmpVec);
 
-        // Comet trail — shift left, write current at the end
         const trail = u.trail;
         if (trail) {
           const p = trail.positions;
@@ -407,7 +432,7 @@ export function PulseSphere({
         mount.style.cursor = hoveredSat ? "pointer" : "";
       }
 
-      // Per-satellite scale tween — hovered grows, others settle to base
+      // Per-satellite scale tween
       for (const sat of satellites) {
         const target =
           sat === hoveredSat
@@ -435,6 +460,10 @@ export function PulseSphere({
         (sw.mesh.material as THREE.MeshBasicMaterial).dispose();
       }
       shockwaveGeo.dispose();
+      ringGeoOuter.dispose();
+      ringMatOuter.dispose();
+      ringGeoInner.dispose();
+      ringMatInner.dispose();
       renderer.dispose();
       geometry.dispose();
       material.dispose();
@@ -445,16 +474,16 @@ export function PulseSphere({
     };
   }, [size]);
 
-  // ───── Rebuild satellites when tokens change ─────
+  // Rebuild satellites when tokens change
   useEffect(() => {
     rebuildRef.current?.(tokens);
   }, [tokens]);
 
-  // Drop shadow color shifts with heat (kept from previous version)
+  // Drop shadow color shifts with heat
   const heatClamped = Math.max(0, Math.min(1, heat));
   const shadowColor =
     heatClamped >= 0.6
-      ? `rgba(255, 45, 156, ${0.16 + heatClamped * 0.08})`
+      ? `rgba(255, 45, 156, ${0.18 + heatClamped * 0.10})`
       : `rgba(94, 92, 255, ${0.14 + (1 - heatClamped) * 0.04})`;
 
   return (
@@ -476,7 +505,7 @@ export function PulseSphere({
         style={{
           width: size,
           height: size,
-          filter: `drop-shadow(0 24px 48px ${shadowColor})`,
+          filter: `drop-shadow(0 28px 56px ${shadowColor})`,
           transition: "filter 1200ms ease-out",
         }}
       />
@@ -484,10 +513,16 @@ export function PulseSphere({
   );
 }
 
-// ───── Sphere shaders (unchanged from previous calm-sphere version) ─────
+// ───── Sphere shaders ─────
+// Smooth sine-wave breath drives a tiny vertex displacement and a subtle
+// fragment glow boost — no exponential snap. Strong fresnel pow(2.5) +
+// translucent body alpha + soft specular exp 8 = glassy depth, not matte
+// plastic.
 
 const VERT = /* glsl */ `
   uniform float uTime;
+  uniform float uHeat;
+  uniform float uBreath;
   varying vec3 vNormal;
   varying vec3 vViewDir;
   varying float vNoise;
@@ -537,9 +572,15 @@ const VERT = /* glsl */ `
   }
 
   void main(){
-    float noise = snoise(position * 1.0 + uTime * 0.25);
+    // Flow speed scales gently with heat
+    float t = uTime * (0.16 + uHeat * 0.40);
+    float noise = snoise(position * 1.5 + t);
     vNoise = noise;
-    float disp = noise * 0.05;
+
+    // Breath drives a tiny smooth expansion (sine, never sharp)
+    float breathExpand = uBreath * 0.06;
+    float disp = noise * 0.06 + breathExpand;
+
     vec3 displaced = position + normal * disp;
     vec4 mv = modelViewMatrix * vec4(displaced, 1.0);
     vViewDir = -mv.xyz;
@@ -551,6 +592,7 @@ const VERT = /* glsl */ `
 const FRAG = /* glsl */ `
   precision highp float;
   uniform float uHeat;
+  uniform float uBreath;
   uniform float uHover;
   varying vec3 vNormal;
   varying vec3 vViewDir;
@@ -560,39 +602,51 @@ const FRAG = /* glsl */ `
     vec3 N = normalize(vNormal);
     vec3 V = normalize(vViewDir);
 
-    vec3 coldColor = vec3(0.36, 0.36, 1.00);
-    vec3 hotColor  = vec3(1.00, 0.18, 0.61);
-    vec3 baseColor = mix(coldColor, hotColor, uHeat);
+    // Fresnel — strong rim, soft center. The fix for "matte plastic."
+    float fres = clamp(1.0 - dot(V, N), 0.0, 1.0);
+    float fresnelRim = pow(fres, 2.5);
 
+    // Liquid color — pink/blue mix with deeper cores for richness
     float n = vNoise * 0.5 + 0.5;
-    baseColor *= 0.85 + n * 0.30;
+    vec3 coldCore    = vec3(0.05, 0.10, 0.80);
+    vec3 coldSurface = vec3(0.37, 0.36, 1.00);
+    vec3 colorCold   = mix(coldCore, coldSurface, n);
 
-    vec3 lightDir = normalize(vec3(0.5, 0.8, 1.0));
-    float NdotL = dot(N, lightDir);
-    float halfLambert = NdotL * 0.5 + 0.5;
-    halfLambert = halfLambert * halfLambert;
+    vec3 hotCore     = vec3(0.80, 0.10, 0.40);
+    vec3 hotSurface  = vec3(1.00, 0.17, 0.61);
+    vec3 colorHot    = mix(hotCore, hotSurface, n);
 
+    vec3 baseColor = mix(colorCold, colorHot, uHeat);
+
+    // Solana green sparkle — only at very high heat, in noise valleys
+    float greenPower = smoothstep(0.80, 1.00, uHeat) * smoothstep(0.70, 1.00, 1.0 - n);
+    vec3 greenAccent = vec3(0.08, 0.94, 0.58);
+    baseColor = mix(baseColor, greenAccent, greenPower);
+
+    // Breath-driven hot glow — gentle pulse, only when hot
+    baseColor += colorHot * uBreath * uHeat * 0.30;
+
+    // Soft specular at low exponent — broad sheen, no aliasing
+    vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
     vec3 R = reflect(-lightDir, N);
-    float spec = pow(max(dot(V, R), 0.0), 90.0);
+    float spec = pow(max(dot(V, R), 0.0), 8.0);
 
-    float fres = pow(clamp(1.0 - dot(V, N), 0.0, 1.0), 1.6);
+    // Compose: base + soft spec + strong fresnel rim
+    vec3 col = baseColor + vec3(1.0) * spec * 0.25 + vec3(1.0) * fresnelRim * 0.40;
 
-    float ambient = 0.35;
-    vec3 col = baseColor * (ambient + halfLambert * 0.70);
-    col += vec3(1.0) * spec * 0.55;
-    col += baseColor * fres * 0.45;
-
+    // Hover lift
     col *= 1.0 + uHover * 0.10;
 
-    float greenPower = smoothstep(0.78, 1.0, uHeat)
-                     * smoothstep(0.55, 1.0, 1.0 - n);
-    col = mix(col, vec3(0.08, 0.94, 0.58), greenPower * 0.45);
-
-    gl_FragColor = vec4(col, 0.96);
+    // Translucent center, opaque rim — reads as glass on a light bg
+    float alpha = 0.70 + fres * 0.30;
+    gl_FragColor = vec4(col, alpha);
   }
 `;
 
-// ───── Satellite texture: logo + colored ring + symbol label ─────
+// ───── Satellite texture ─────
+// New design: NO white plate (was clashing on the light bg). Just a circular
+// logo with a thin colored ring + soft drop shadow. Symbol below as small
+// label with a subtle white halo for legibility on whatever bg.
 
 type SatelliteCfg = {
   ca: string;
@@ -606,85 +660,81 @@ async function createSatelliteTexture(cfg: SatelliteCfg): Promise<THREE.CanvasTe
   canvas.width = 256;
   canvas.height = 256;
   const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    return new THREE.CanvasTexture(canvas);
-  }
+  if (!ctx) return new THREE.CanvasTexture(canvas);
 
-  const drawFrame = () => {
-    // Outer glow ring
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = cfg.ringColor;
-    ctx.strokeStyle = cfg.ringColor;
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.arc(128, 128, 88, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  };
+  // Soft drop shadow under the disc
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 6;
+  ctx.shadowBlur = 16;
+  ctx.shadowColor = "rgba(10, 10, 30, 0.20)";
+  ctx.fillStyle = "rgba(0, 0, 0, 0)";
+  ctx.beginPath();
+  ctx.arc(128, 120, 78, 0, Math.PI * 2);
+  ctx.fill();
+  // Reset shadow
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
 
-  const drawWhitePlate = () => {
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.arc(128, 128, 84, 0, Math.PI * 2);
-    ctx.fill();
-  };
-
-  const drawSymbolLabel = () => {
-    // Label below the disc
-    ctx.fillStyle = "rgba(10, 10, 20, 0.92)";
-    ctx.font = "bold 22px ui-sans-serif, system-ui, -apple-system, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    // Background pill behind the label for contrast on light bg
-    const text = cfg.symbol.slice(0, 8);
-    const metrics = ctx.measureText(text);
-    const tw = metrics.width + 16;
-    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-    roundRect(ctx, 128 - tw / 2, 220, tw, 26, 8);
-    ctx.fill();
-    ctx.fillStyle = "rgba(10, 10, 20, 0.92)";
-    ctx.fillText(text, 128, 234);
-  };
-
-  const drawFallbackLogo = () => {
-    const grad = ctx.createLinearGradient(40, 40, 216, 216);
+  const drawFallback = () => {
+    const grad = ctx.createLinearGradient(50, 42, 206, 198);
     grad.addColorStop(0, "#FF2D9C");
     grad.addColorStop(0.5, "#5E5CFF");
     grad.addColorStop(1, "#14F195");
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(128, 128, 78, 0, Math.PI * 2);
+    ctx.arc(128, 120, 78, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 56px ui-sans-serif, system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(cfg.symbol.slice(0, 1) || "?", 128, 130);
+    ctx.fillText(cfg.symbol.slice(0, 1) || "?", 128, 122);
   };
-
-  drawFrame();
-  drawWhitePlate();
 
   if (cfg.image) {
     try {
       const img = await loadImage(cfg.image);
-      // Clipped circular logo
       ctx.save();
       ctx.beginPath();
-      ctx.arc(128, 128, 78, 0, Math.PI * 2);
+      ctx.arc(128, 120, 78, 0, Math.PI * 2);
       ctx.clip();
-      // Use cover-style draw — fit logo into the circle.
       const r = 156;
-      ctx.drawImage(img, 128 - r / 2, 128 - r / 2, r, r);
+      ctx.drawImage(img, 128 - r / 2, 120 - r / 2, r, r);
       ctx.restore();
     } catch {
-      drawFallbackLogo();
+      drawFallback();
     }
   } else {
-    drawFallbackLogo();
+    drawFallback();
   }
 
-  drawSymbolLabel();
+  // Thin colored ring (no plate underneath now — logo sits on the bg directly)
+  ctx.strokeStyle = cfg.ringColor;
+  ctx.lineWidth = 4;
+  ctx.shadowBlur = 14;
+  ctx.shadowColor = cfg.ringColor;
+  ctx.beginPath();
+  ctx.arc(128, 120, 80, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Symbol label below — small, with a soft white halo for legibility
+  const text = cfg.symbol.slice(0, 8);
+  ctx.font = "bold 22px ui-sans-serif, system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  // White halo
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.shadowBlur = 6;
+  ctx.shadowColor = "rgba(255, 255, 255, 0.95)";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.fillText(text, 128, 226);
+  ctx.fillText(text, 128, 226);
+  // Solid dark text on top
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(10, 10, 22, 0.95)";
+  ctx.fillText(text, 128, 226);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -701,25 +751,4 @@ function loadImage(url: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error("image_load_failed"));
     img.src = url;
   });
-}
-
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
 }
