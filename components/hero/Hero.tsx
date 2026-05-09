@@ -10,19 +10,24 @@ import { HeartbeatBadge } from "./HeartbeatBadge";
 import { computeHeat, heatToBpm } from "@/lib/utils/heat";
 import type { TrendingToken } from "@/types/token";
 
+const HOVER_HEAT_LIFT = 0.15;
+const SUBMIT_VALID_HEAT = 0.95;
+const SUBMIT_INVALID_HEAT = 0.4;
+const TRANSIENT_MS = 2200;
+
 export function Hero() {
-  // Baseline BPM is driven by current Solana market heat (avg abs 24h % change
-  // across the trending list). Hover and click apply transient overrides that
-  // briefly push the rate up, then the heart settles back to whatever the
-  // market is actually doing.
-  const [marketBpm, setMarketBpm] = useState(55);
+  // Heat-canonical state model. The sphere is heat-driven (no literal
+  // heartbeat any more), the badge derives its BPM from the same heat.
+  // Submit transients can override BPM independently for the "On fire" label.
+  const [marketHeat, setMarketHeat] = useState(0.2);
+  const [transientHeat, setTransientHeat] = useState<number | null>(null);
   const [transientBpm, setTransientBpm] = useState<number | null>(null);
-  const bpm = transientBpm ?? marketBpm;
+  const heat = transientHeat ?? marketHeat;
+  const bpm = transientBpm ?? heatToBpm(Math.min(1, heat));
   const [sphereSize, setSphereSize] = useState(440);
   const heroRef = useRef<HTMLElement>(null);
 
-  // Poll trending → heat → BPM. /api/trending is server-cached for 60s, so
-  // the cost is essentially free.
+  // Poll trending → heat. /api/trending is server-cached for 60s.
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
@@ -31,7 +36,7 @@ export function Hero() {
         if (!r.ok) return;
         const json = (await r.json()) as { tokens: TrendingToken[] };
         if (cancelled) return;
-        setMarketBpm(heatToBpm(computeHeat(json.tokens)));
+        setMarketHeat(computeHeat(json.tokens));
       } catch {
         /* swallow */
       }
@@ -142,7 +147,7 @@ export function Hero() {
             </p>
 
             <div data-fade-up className="mt-10 hidden lg:block">
-              <TrendingList limit={5} />
+              <TrendingList limit={5} heat={heat} />
             </div>
           </div>
 
@@ -151,15 +156,14 @@ export function Hero() {
             <div
               data-sphere-in
               onMouseEnter={() => {
-                // Transient lift on hover — push 12 BPM above the market baseline,
-                // capped so we don't blow past the badge's "Hot" threshold gratuitously.
-                setTransientBpm(Math.min(85, marketBpm + 12));
+                // Subtle warmth lift on hover, capped at 1.
+                setTransientHeat(Math.min(1, marketHeat + HOVER_HEAT_LIFT));
               }}
-              onMouseLeave={() => setTransientBpm(null)}
+              onMouseLeave={() => setTransientHeat(null)}
             >
-              <PulseSphere size={sphereSize} bpm={bpm} />
+              <PulseSphere size={sphereSize} heat={heat} />
             </div>
-            {/* Floating BPM badge — beats with the actual sphere rhythm */}
+            {/* Floating BPM badge — derives from the same heat */}
             <div
               data-fade-up
               className="absolute bottom-4 sm:bottom-6 right-4 sm:right-6 lg:right-2"
@@ -171,7 +175,7 @@ export function Hero() {
 
         {/* Mobile-only trending below the sphere */}
         <div data-fade-up className="lg:hidden mt-10 flex justify-center">
-          <TrendingList limit={4} />
+          <TrendingList limit={4} heat={heat} />
         </div>
       </div>
 
@@ -182,9 +186,16 @@ export function Hero() {
       >
         <CaPasteBox
           onPulse={(kind) => {
-            // Submit spike — quick excitement, then back to market baseline.
-            setTransientBpm(kind === "valid" ? 130 : 78);
-            setTimeout(() => setTransientBpm(null), 2200);
+            // Submit spike — quick excitement (heat → near max, BPM → "On fire"),
+            // then auto-clear back to whatever the market is actually doing.
+            const targetHeat = kind === "valid" ? SUBMIT_VALID_HEAT : SUBMIT_INVALID_HEAT;
+            const targetBpm = kind === "valid" ? 130 : 78;
+            setTransientHeat(targetHeat);
+            setTransientBpm(targetBpm);
+            setTimeout(() => {
+              setTransientHeat(null);
+              setTransientBpm(null);
+            }, TRANSIENT_MS);
           }}
         />
         <p className="mt-3.5 text-center text-[11px] sm:text-[12px] text-text-muted">

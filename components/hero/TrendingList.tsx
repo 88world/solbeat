@@ -10,8 +10,17 @@ import { humanizeNumber, pctChange } from "@/lib/utils";
  * Vertical trending list — replaces the orbital ring with something readable.
  * Each row: avatar (logo or gradient fallback) + symbol + name + % change.
  * Slide-up entrance with anime.js stagger once data lands.
+ *
+ * Optional `heat` prop (0..1) — when the market gets hot, the live indicator
+ * dot shifts from brand pink to Solana green to reinforce the sphere's signal.
  */
-export function TrendingList({ limit = 5 }: { limit?: number }) {
+export function TrendingList({
+  limit = 5,
+  heat = 0,
+}: {
+  limit?: number;
+  heat?: number;
+}) {
   const [tokens, setTokens] = useState<TrendingToken[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
   const animatedRef = useRef(false);
@@ -52,15 +61,25 @@ export function TrendingList({ limit = 5 }: { limit?: number }) {
     });
   }, [tokens]);
 
+  const isHot = heat >= 0.6;
+  const dotColor = isHot ? "#14F195" : "#FF2D9C";
+  const label = isHot ? "Live · market is hot" : "Live · trending now";
+
   return (
     <div ref={rootRef} className="w-full max-w-sm">
       <div className="flex items-center gap-2.5 mb-4">
         <span className="relative flex size-2">
-          <span className="absolute inline-flex h-full w-full rounded-full bg-accent-pulse opacity-75 animate-ping" />
-          <span className="relative inline-flex size-2 rounded-full bg-accent-pulse" />
+          <span
+            className="absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping transition-colors duration-1000"
+            style={{ background: dotColor }}
+          />
+          <span
+            className="relative inline-flex size-2 rounded-full transition-colors duration-1000"
+            style={{ background: dotColor }}
+          />
         </span>
-        <span className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
-          Live · trending now
+        <span className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-text-secondary transition-colors">
+          {label}
         </span>
       </div>
       <div className="flex flex-col gap-2">

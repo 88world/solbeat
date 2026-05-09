@@ -5,30 +5,22 @@ import * as THREE from "three";
 
 type Props = {
   size?: number;
-  /** Heart-rate state — period scales with this. */
-  bpm?: number;
+  /**
+   * Market heat (0..1+). Drives flow speed, color temperature, and spin.
+   * 0 = cool blue, glassy, slow flow. 1 = hot pink with green sparkle, faster
+   * churn. Values >1 are clamped to 1 inside the shader.
+   *
+   * Crucially this replaces the previous `bpm` prop — the orb no longer has a
+   * literal heartbeat (the lub-dub expand/contract was the source of the
+   * "harsh on the eye" feedback). Heat drives a continuous, ambient flow.
+   */
+  heat?: number;
 };
 
-/**
- * Liquid heartbeat orb.
- *
- * Surface flow comes from FBM (fractal Brownian motion — 3 octaves of simplex
- * noise summed) sampled at a *domain-warped* position: a separate triple of
- * noise samples perturbs the input coordinates before the main FBM is taken.
- * That combination — the same trick Maxime Heckel and the threejs-journey
- * "flow field" lessons use — gives genuinely organic, never-repeating motion
- * that reads as ink moving in water rather than a sphere wobbling.
- *
- * On top of the flow: iridescent fresnel + two-light specular (warm key,
- * cool brand-pink fill) for wet-glass dimensionality, cursor-warp ripples,
- * heartbeat pulse, slow levitation float, smoothstep rim for a soft edge.
- *
- * Direct render — no postprocessing — so the visual is consistent across GPUs.
- */
-export function PulseSphere({ size = 480, bpm = 50 }: Props) {
+export function PulseSphere({ size = 480, heat = 0.2 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const bpmRef = useRef(bpm);
-  bpmRef.current = bpm;
+  const heatRef = useRef(heat);
+  heatRef.current = heat;
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -52,22 +44,16 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
     camera.position.set(0, 0, 3.3);
 
-    // 64-subdivision = ~84k tris. With FBM on each vertex we want enough
-    // triangles to resolve the flow but not so many that we stall on noise
-    // sampling. 64 is the sweet spot for buttery surface motion.
+    // 64-subdivision = ~84k tris. Smooth silhouette without GPU strain.
     const geometry = new THREE.IcosahedronGeometry(1, 64);
 
     const uniforms = {
       uTime: { value: 0 },
-      uPulse: { value: 0 },
-      uHover: { value: 0 },
+      uHeat: { value: 0 },
       uMouse: { value: new THREE.Vector2(0, 0) },
-      uColorA: { value: new THREE.Color("#FF2D9C") }, // BV pink
-      uColorB: { value: new THREE.Color("#5E5CFF") }, // BV blue
-      uColorC: { value: new THREE.Color("#14F195") }, // Solana green (sparkle only)
     };
 
     const material = new THREE.ShaderMaterial({
@@ -75,12 +61,11 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
       transparent: true,
       vertexShader: /* glsl */ `
         uniform float uTime;
-        uniform float uPulse;
+        uniform float uHeat;
         uniform vec2 uMouse;
         varying vec3 vNormal;
-        varying vec3 vViewDir;
+        varying vec3 vViewPosition;
         varying float vNoise;
-        varying float vDisp;
 
         // Ashima simplex noise
         vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
@@ -127,47 +112,26 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
           return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
         }
 
-        // Fractal Brownian motion — 3 octaves at doubling frequencies
-        float fbm(vec3 p){
-          float v = 0.0;
-          float a = 0.5;
-          for(int i = 0; i < 3; i++){
-            v += a * snoise(p);
-            p = p * 2.02;
-            a *= 0.5;
-          }
-          return v;
-        }
-
         void main(){
-          // Lower base frequency = longer wavelengths = smoother flow.
-          vec3 base = position * 0.65;
+          // Time scales with heat. Cool = slow churn, hot = visibly faster flow.
+          // This is the "hot market" signal — speed of motion, not pulse frequency.
+          float time = uTime * (0.30 + uHeat * 0.55);
 
-          // Domain warping — three independent noise samples perturb the
-          // input coordinates. This is the trick that turns "wobble" into
-          // "flow."
-          vec3 q = vec3(
-            snoise(base + vec3(uTime * 0.18, 0.0, 0.0)),
-            snoise(base + vec3(0.0, uTime * 0.22, 5.7)),
-            snoise(base + vec3(8.3, 0.0, uTime * 0.15))
-          );
+          // Single-octave low-frequency noise — silky, never jagged.
+          float noise = snoise(position * 1.2 + time);
+          vNoise = noise;
 
-          // Sample FBM at the warped position.
-          float n = fbm(base + q * 0.55);
-          vNoise = n;
+          // Tiny mouse warp — barely perceptible reactivity.
+          float mouseRipple = sin(position.y * 3.0 + uTime) * uMouse.x * 0.04
+                            + cos(position.x * 3.0 + uTime) * uMouse.y * 0.04;
 
-          // Cursor warp — wave ripple along the surface based on cursor.
-          float mouseRipple = sin(position.y * 3.6 + uTime * 0.7) * uMouse.x * 0.08
-                            + cos(position.x * 3.6 + uTime * 0.6) * uMouse.y * 0.08;
+          // Displacement is small and capped — silhouette stays mostly round.
+          // Heat slightly amplifies amplitude so a hot market visibly churns harder.
+          float disp = noise * 0.085 * (0.85 + uHeat * 0.4);
 
-          // Softer pulse expansion — visible bulge, never a snap.
-          float pulseExpand = uPulse * 0.06;
-          float disp = n * 0.13 + pulseExpand + mouseRipple;
-          vDisp = disp;
-
-          vec3 displaced = position + normal * disp;
-          vec4 mv = modelViewMatrix * vec4(displaced, 1.0);
-          vViewDir = -mv.xyz;
+          vec3 displacedPos = position + normal * (disp + mouseRipple);
+          vec4 mv = modelViewMatrix * vec4(displacedPos, 1.0);
+          vViewPosition = -mv.xyz;
           vNormal = normalMatrix * normal;
           gl_Position = projectionMatrix * mv;
         }
@@ -175,98 +139,53 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
       fragmentShader: /* glsl */ `
         precision highp float;
         uniform float uTime;
-        uniform float uPulse;
-        uniform float uHover;
-        uniform vec3 uColorA;
-        uniform vec3 uColorB;
-        uniform vec3 uColorC;
+        uniform float uHeat;
         varying vec3 vNormal;
-        varying vec3 vViewDir;
+        varying vec3 vViewPosition;
         varying float vNoise;
-        varying float vDisp;
-
-        float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
         void main(){
           vec3 N = normalize(vNormal);
-          vec3 V = normalize(vViewDir);
+          vec3 V = normalize(vViewPosition);
 
-          // Fresnel
-          float ndotv = clamp(dot(V, N), 0.0, 1.0);
-          float fres = 1.0 - ndotv;
-          float fresPow = pow(fres, 2.0);
+          // Soft, broad fresnel for a glassy bubble look.
+          float fres = clamp(1.0 - dot(V, N), 0.0, 1.0);
 
-          // Liquid base color — pink/blue mix flowing with the FBM
-          vec3 base = mix(uColorB, uColorA, smoothstep(-0.4, 1.0, vNoise + uPulse * 0.4));
+          // Normalize noise to [0, 1] for color blending
+          float n = vNoise * 0.5 + 0.5;
 
-          // Iridescent rim — animated chromatic shimmer
-          vec3 iri = vec3(
-            sin(fres * 8.0  + uTime * 1.0)        * 0.5 + 0.5,
-            sin(fres * 10.0 + uTime * 1.25 + 1.7) * 0.5 + 0.5,
-            sin(fres * 12.0 + uTime * 1.5  + 3.4) * 0.5 + 0.5
-          );
-          vec3 col = mix(base, iri, fresPow * 0.55);
+          // ── Color temperature: cold deep blue → hot pink ──
+          vec3 coldCore    = vec3(0.10, 0.20, 1.00);  // #1A33FF — deep blue
+          vec3 coldSurface = vec3(0.37, 0.36, 1.00);  // #5E5CFF — BV blue
+          vec3 colorCold   = mix(coldCore, coldSurface, n);
 
-          // Two-light specular — key (warm, exponent 64) + fill (brand pink, exponent 24)
-          vec3 keyDir  = normalize(vec3( 0.6,  0.9,  0.8));
-          vec3 fillDir = normalize(vec3(-0.5, -0.4,  0.6));
-          vec3 Rk = reflect(-keyDir,  N);
-          vec3 Rf = reflect(-fillDir, N);
-          float specKey  = pow(max(dot(V, Rk), 0.0), 64.0);
-          float specFill = pow(max(dot(V, Rf), 0.0), 24.0);
-          col += vec3(1.0) * specKey * 1.35;
-          col += uColorA * specFill * 0.32;
+          vec3 hotCore     = vec3(1.00, 0.18, 0.61);  // #FF2D9C — BV pink
+          vec3 hotSurface  = vec3(1.00, 0.45, 0.55);  // coral tint
+          vec3 colorHot    = mix(hotCore, hotSurface, n);
 
-          // Heartbeat green sparkle — gentler now, just a hint of green on the peak
-          float sparkle = smoothstep(0.55, 0.95, vDisp + 0.5) * uPulse;
-          col = mix(col, uColorC, sparkle * 0.18);
+          vec3 baseColor = mix(colorCold, colorHot, uHeat);
 
-          // Gentle pulse-driven exposure lift — no harsh flash
-          col *= (0.95 + uPulse * 0.20 + uHover * 0.08);
+          // ── Solana green sparkle: only at very high heat, only in valleys ──
+          float greenPower = smoothstep(0.7, 1.0, uHeat) * smoothstep(0.6, 1.0, 1.0 - n);
+          vec3 greenAccent = vec3(0.08, 0.94, 0.58);  // #14F195
+          baseColor = mix(baseColor, greenAccent, greenPower * 0.8);
 
-          // Dither to kill banding
-          float d = (hash(gl_FragCoord.xy) - 0.5) / 255.0;
-          col += d;
+          // ── Soft specular: low exponent (16) gives a broad sheen, no jagged pixel highlights ──
+          vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
+          vec3 R = reflect(-lightDir, N);
+          float spec = pow(max(dot(V, R), 0.0), 16.0);
+          vec3 finalColor = baseColor + vec3(1.0) * spec * 0.32;
 
-          // Smoothstep rim — soft glassy edge instead of a hard circle
-          float bodyAlpha = 0.93;
-          float rimSoft = smoothstep(0.92, 1.0, fres);
-          float alpha = bodyAlpha - rimSoft * 0.55 + uHover * 0.06;
-          gl_FragColor = vec4(col, clamp(alpha, 0.35, 1.0));
+          // Translucent body, slightly more opaque at the rim — looks like a glass bubble.
+          float alpha = 0.62 + fres * 0.30;
+
+          gl_FragColor = vec4(finalColor, alpha);
         }
       `,
     });
+
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
-
-    // Outer halo — soft, gentle falloff so the orb melts into the bg
-    const haloGeo = new THREE.SphereGeometry(1.62, 48, 48);
-    const haloMat = new THREE.ShaderMaterial({
-      uniforms: { uPulse: uniforms.uPulse },
-      transparent: true,
-      side: THREE.BackSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      vertexShader: `
-        varying vec3 vN;
-        void main(){
-          vN = normalize(normalMatrix * normal);
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        precision highp float;
-        uniform float uPulse;
-        varying vec3 vN;
-        void main(){
-          // Gentler halo modulation — barely brightens with the pulse instead of flashing.
-          float f = pow(1.0 - abs(vN.z), 4.0);
-          vec3 col = mix(vec3(0.37, 0.36, 1.0), vec3(1.0, 0.18, 0.61), 0.55);
-          gl_FragColor = vec4(col, f * (0.13 + uPulse * 0.10));
-        }
-      `,
-    });
-    scene.add(new THREE.Mesh(haloGeo, haloMat));
 
     // ───── Animation loop ─────
     let raf = 0;
@@ -277,21 +196,16 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
     document.addEventListener("visibilitychange", onVis);
 
     let last = performance.now();
-    let phase = 0;
+    let currentHeat = 0;
     let targetMouseX = 0;
     let targetMouseY = 0;
-    let targetHover = 0;
 
     const onMove = (e: MouseEvent) => {
       const r = mount.getBoundingClientRect();
       const cx = r.left + r.width / 2;
       const cy = r.top + r.height / 2;
-      const dx = (e.clientX - cx) / (r.width / 2);
-      const dy = (e.clientY - cy) / (r.height / 2);
-      targetMouseX = Math.max(-1, Math.min(1, dx));
-      targetMouseY = Math.max(-1, Math.min(1, dy));
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      targetHover = dist < 1.2 ? 1 - Math.min(1, dist / 1.2) : 0;
+      targetMouseX = Math.max(-1, Math.min(1, (e.clientX - cx) / (r.width / 2)));
+      targetMouseY = Math.max(-1, Math.min(1, (e.clientY - cy) / (r.height / 2)));
     };
     window.addEventListener("mousemove", onMove);
 
@@ -300,28 +214,23 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
       if (!visible) return;
       const dt = Math.min(50, now - last) / 1000;
       last = now;
-      uniforms.uTime.value += dt * 0.45;
 
-      // Damped lerping — smoother than per-frame snapping
-      uniforms.uMouse.value.x += (targetMouseX - uniforms.uMouse.value.x) * 0.07;
-      uniforms.uMouse.value.y += (targetMouseY - uniforms.uMouse.value.y) * 0.07;
-      uniforms.uHover.value += (targetHover - uniforms.uHover.value) * 0.08;
+      uniforms.uTime.value += dt;
 
-      // Heartbeat — single smooth sin² bulge per cycle, capped low.
-      // The previous lub-dub Gaussian peaks felt twitchy at high BPM. A
-      // single rounded curve reads as ambient breathing, not a medical
-      // monitor. Cap at 0.55 so even peaks stay calm on the eye.
-      const period = 60 / bpmRef.current;
-      phase += dt / period;
-      const t = phase % 1;
-      const beat = Math.pow(Math.sin(Math.PI * t), 2);
-      uniforms.uPulse.value = reduced ? 0.08 : Math.min(0.55, beat * 0.7);
+      // Smoothly interpolate heat — transitions never snap.
+      const targetHeat = Math.max(0, Math.min(1, heatRef.current));
+      currentHeat += (targetHeat - currentHeat) * Math.min(1, dt * 1.8);
+      uniforms.uHeat.value = reduced ? Math.min(0.4, currentHeat) : currentHeat;
 
-      // Slow tilt + steady spin + levitation
-      mesh.rotation.x += (targetMouseY * 0.28 - mesh.rotation.x) * 0.04;
-      mesh.rotation.y += (targetMouseX * 0.36 - mesh.rotation.y) * 0.04 + dt * 0.05;
-      mesh.rotation.z += dt * 0.008;
-      mesh.position.y = Math.sin(now / 1900) * 0.06;
+      // Smoothly interpolate mouse
+      uniforms.uMouse.value.x += (targetMouseX - uniforms.uMouse.value.x) * 0.06;
+      uniforms.uMouse.value.y += (targetMouseY - uniforms.uMouse.value.y) * 0.06;
+
+      // Steady idle motion — spin slightly faster when hot, levitation float
+      mesh.rotation.y += dt * (0.06 + currentHeat * 0.10);
+      mesh.rotation.x += dt * 0.02;
+      mesh.rotation.z += dt * 0.005;
+      mesh.position.y = Math.sin(now / 2200) * 0.06;
 
       renderer.render(scene, camera);
     };
@@ -333,35 +242,43 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
       document.removeEventListener("visibilitychange", onVis);
       renderer.dispose();
       geometry.dispose();
-      haloGeo.dispose();
       material.dispose();
-      haloMat.dispose();
       if (renderer.domElement.parentNode === mount) {
         mount.removeChild(renderer.domElement);
       }
     };
   }, [size]);
 
+  // Drop shadow color shifts with heat — purple when cool, pink when hot.
+  // Computed JS-side because the shadow lives on the wrapper, not the canvas.
+  const heatClamped = Math.max(0, Math.min(1, heat));
+  const shadowColor =
+    heatClamped >= 0.6
+      ? `rgba(255, 45, 156, ${0.12 + heatClamped * 0.10})`
+      : `rgba(94, 92, 255, ${0.12 + (1 - heatClamped) * 0.06})`;
+
   return (
     <div className="relative flex items-center justify-center" aria-hidden>
-      {/* Soft brand-tinted backdrop */}
+      {/* Soft brand-tinted backdrop — also shifts with heat */}
       <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none transition-opacity duration-1000"
         style={{
-          width: size * 0.94,
-          height: size * 0.94,
+          width: size * 0.92,
+          height: size * 0.92,
           background:
-            "radial-gradient(circle at 50% 50%, rgba(255, 45, 156, 0.20), rgba(94, 92, 255, 0.14) 40%, transparent 72%)",
+            heatClamped >= 0.6
+              ? "radial-gradient(circle at 50% 50%, rgba(255, 45, 156, 0.22), rgba(20, 241, 149, 0.10) 50%, transparent 72%)"
+              : "radial-gradient(circle at 50% 50%, rgba(94, 92, 255, 0.20), rgba(255, 45, 156, 0.10) 50%, transparent 72%)",
           filter: "blur(60px)",
         }}
       />
       <div
         ref={mountRef}
-        className="pointer-events-auto cursor-crosshair transition-transform duration-700 ease-out hover:scale-[1.025]"
+        className="pointer-events-auto cursor-crosshair transition-[filter] duration-1000 hover:scale-[1.02]"
         style={{
           width: size,
           height: size,
-          filter: "drop-shadow(0 30px 60px rgba(94, 92, 255, 0.16))",
+          filter: `drop-shadow(0 30px 60px ${shadowColor})`,
         }}
       />
     </div>
