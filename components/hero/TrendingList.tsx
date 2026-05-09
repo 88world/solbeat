@@ -21,24 +21,30 @@ const ROTATE_INTERVAL_MS = 4500;
 export function TrendingList({
   limit = 5,
   heat = 0,
+  tokens: tokensProp,
 }: {
   limit?: number;
   heat?: number;
+  /** Optional — if provided, the list won't fetch on its own. Hero already does. */
+  tokens?: TrendingToken[];
 }) {
-  const [tokens, setTokens] = useState<TrendingToken[]>([]);
+  const [tokensInternal, setTokensInternal] = useState<TrendingToken[]>([]);
+  const tokens = tokensProp ?? tokensInternal;
   const [offset, setOffset] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const animatedRef = useRef(false);
 
-  // Fetch trending pool
+  // Self-fetch only when no tokens prop is passed — keeps the component
+  // standalone-capable while letting Hero deduplicate the network call.
   useEffect(() => {
+    if (tokensProp) return;
     let cancelled = false;
     const load = async () => {
       try {
         const r = await fetch("/api/trending", { cache: "no-store" });
         if (!r.ok) return;
         const json = (await r.json()) as { tokens: TrendingToken[] };
-        if (!cancelled) setTokens(json.tokens);
+        if (!cancelled) setTokensInternal(json.tokens);
       } catch {
         /* swallow */
       }
@@ -49,7 +55,7 @@ export function TrendingList({
       cancelled = true;
       clearInterval(id);
     };
-  }, []);
+  }, [tokensProp]);
 
   // Auto-rotate the visible window — only when we have more than `limit` tokens
   useEffect(() => {

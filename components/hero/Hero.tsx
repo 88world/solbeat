@@ -6,8 +6,8 @@ import { PulseSphere } from "./PulseSphere";
 import { TrendingList } from "./TrendingList";
 import { CaPasteBox } from "./CaPasteBox";
 import { AmbientOrbs } from "./AmbientOrbs";
-import { HeartbeatBadge } from "./HeartbeatBadge";
-import { computeHeat, heatToBpm } from "@/lib/utils/heat";
+import { MarketPulse } from "./MarketPulse";
+import { computeHeatSnapshot, type HeatSnapshot } from "@/lib/utils/heat";
 import type { TrendingToken } from "@/types/token";
 
 const SUBMIT_VALID_HEAT = 0.95;
@@ -15,14 +15,9 @@ const SUBMIT_INVALID_HEAT = 0.4;
 const TRANSIENT_MS = 2400;
 
 export function Hero() {
-  // Heat is canonical. Hover does NOT affect heat — that was the source of the
-  // "speeds up on hover" complaint. The sphere has its own internal hover
-  // detection that only lifts brightness, never flow speed or spin.
-  const [marketHeat, setMarketHeat] = useState(0.2);
+  const [snapshot, setSnapshot] = useState<HeatSnapshot | null>(null);
   const [transientHeat, setTransientHeat] = useState<number | null>(null);
-  const [transientBpm, setTransientBpm] = useState<number | null>(null);
-  const heat = transientHeat ?? marketHeat;
-  const bpm = transientBpm ?? heatToBpm(Math.min(1, heat));
+  const heat = transientHeat ?? snapshot?.heat ?? 0.2;
 
   const [sphereSize, setSphereSize] = useState(360);
   const heroRef = useRef<HTMLElement>(null);
@@ -31,16 +26,13 @@ export function Hero() {
     const compute = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      // Cap by both width and height so the sphere always fits the visible area.
-      // Tightened down so the whole hero fits in one viewport on standard screens.
       let target: number;
       if (w < 480) target = 240;
-      else if (w < 768) target = 300;
-      else if (w < 1100) target = 320;
-      else if (w < 1440) target = 360;
-      else target = 400;
-      // Don't let the sphere exceed ~half the viewport height
-      target = Math.min(target, Math.floor(h * 0.55));
+      else if (w < 768) target = 280;
+      else if (w < 1100) target = 300;
+      else if (w < 1440) target = 340;
+      else target = 380;
+      target = Math.min(target, Math.floor(h * 0.50));
       setSphereSize(target);
     };
     compute();
@@ -48,7 +40,9 @@ export function Hero() {
     return () => window.removeEventListener("resize", compute);
   }, []);
 
-  // Market heat poll
+  // Single trending fetch — used by both the heat snapshot and the trending list
+  // (passed down via prop).
+  const [tokens, setTokens] = useState<TrendingToken[]>([]);
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
@@ -57,7 +51,8 @@ export function Hero() {
         if (!r.ok) return;
         const json = (await r.json()) as { tokens: TrendingToken[] };
         if (cancelled) return;
-        setMarketHeat(computeHeat(json.tokens));
+        setTokens(json.tokens);
+        setSnapshot(computeHeatSnapshot(json.tokens));
       } catch {
         /* swallow */
       }
@@ -81,7 +76,7 @@ export function Hero() {
         opacity: [0, 1],
         translateY: [16, 0],
         duration: 700,
-        delay: stagger(90, { start: 80 }),
+        delay: stagger(80, { start: 80 }),
         ease: "out(3)",
       });
     }
@@ -91,7 +86,7 @@ export function Hero() {
         opacity: [0, 1],
         scale: [0.88, 1],
         duration: 1100,
-        delay: 100,
+        delay: 120,
         ease: "out(4)",
       });
     }
@@ -106,80 +101,69 @@ export function Hero() {
       <AmbientOrbs />
       <div className="absolute inset-0 dot-grid pointer-events-none" aria-hidden />
 
-      <div className="relative z-10 mx-auto max-w-[1240px] w-full h-full px-6 lg:px-10 py-6 lg:py-8 flex flex-col">
-        {/* TOP — paste box, the action */}
-        <div data-fade-up className="mb-4 lg:mb-6 shrink-0">
+      <div className="relative z-10 mx-auto max-w-[1240px] w-full h-full px-6 lg:px-10 py-5 lg:py-7 flex flex-col">
+        {/* TOP — paste box */}
+        <div data-fade-up className="mb-3 lg:mb-4 shrink-0">
           <CaPasteBox
             heat={heat}
             onPulse={(kind) => {
               const targetHeat =
                 kind === "valid" ? SUBMIT_VALID_HEAT : SUBMIT_INVALID_HEAT;
-              const targetBpm = kind === "valid" ? 130 : 78;
               setTransientHeat(targetHeat);
-              setTransientBpm(targetBpm);
-              setTimeout(() => {
-                setTransientHeat(null);
-                setTransientBpm(null);
-              }, TRANSIENT_MS);
+              setTimeout(() => setTransientHeat(null), TRANSIENT_MS);
             }}
           />
-          <p className="mt-2.5 text-center text-[11.5px] text-text-muted">
+          <p className="mt-2 text-center text-[11px] text-text-muted">
             try{" "}
             <TickerHint />
             {" "}or paste any contract · ⌘V from anywhere
           </p>
         </div>
 
-        {/* BODY — two-column, fills remaining height */}
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-6 lg:gap-8 items-center flex-1 min-h-0">
-          {/* LEFT */}
-          <div className="flex flex-col items-start text-left order-2 lg:order-1 min-h-0">
-            <h1
-              data-fade-up
-              className="font-extrabold tracking-[-0.04em] leading-[1.02] text-text-primary text-[clamp(1.9rem,4vw,3.25rem)]"
-            >
-              The pulse
-              <br />
-              <span
-                className="inline-block bg-clip-text text-transparent text-shimmer pb-0.5"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(110deg, #FF2D9C 0%, #5E5CFF 35%, #14F195 70%, #FF2D9C 100%)",
-                }}
-              >
-                of Solana.
-              </span>
-            </h1>
-            <p
-              data-fade-up
-              className="mt-3 text-text-secondary text-[13px] sm:text-[14px] leading-relaxed max-w-md font-medium"
-            >
-              Token intel decoded by AI — on-chain, social, and live catalysts
-              in one read.
-            </p>
+        {/* BODY — two-column */}
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-5 lg:gap-7 items-center flex-1 min-h-0">
+          {/* LEFT: headline + market pulse + trending */}
+          <div className="flex flex-col items-start text-left order-2 lg:order-1 min-h-0 gap-4">
+            <div data-fade-up>
+              <h1 className="font-extrabold tracking-[-0.04em] leading-[1.02] text-text-primary text-[clamp(1.7rem,3.4vw,2.75rem)]">
+                The pulse
+                <br />
+                <span
+                  className="inline-block bg-clip-text text-transparent text-shimmer pb-0.5"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(110deg, #FF2D9C 0%, #5E5CFF 35%, #14F195 70%, #FF2D9C 100%)",
+                  }}
+                >
+                  of Solana.
+                </span>
+              </h1>
+              <p className="mt-2 text-text-secondary text-[12.5px] sm:text-[13px] leading-relaxed max-w-md font-medium">
+                Token intel decoded by AI — on-chain, social, and live catalysts in one read.
+              </p>
+            </div>
 
-            <div data-fade-up className="mt-5 hidden lg:block w-full">
-              <TrendingList limit={4} heat={heat} />
+            <div data-fade-up className="hidden lg:block w-full">
+              <MarketPulse pulse={snapshot} />
+            </div>
+
+            <div data-fade-up className="hidden lg:block w-full">
+              <TrendingList limit={3} heat={heat} tokens={tokens} />
             </div>
           </div>
 
-          {/* RIGHT */}
+          {/* RIGHT: sphere */}
           <div className="relative flex items-center justify-center order-1 lg:order-2">
             <div data-sphere-in>
               <PulseSphere size={sphereSize} heat={heat} />
             </div>
-            <div
-              data-fade-up
-              className="absolute bottom-1 sm:bottom-3 right-1 sm:right-3"
-            >
-              <HeartbeatBadge bpm={bpm} />
-            </div>
           </div>
         </div>
 
-        {/* Mobile-only trending */}
-        <div data-fade-up className="lg:hidden mt-6 flex justify-center">
-          <TrendingList limit={3} heat={heat} />
+        {/* Mobile-only stack */}
+        <div className="lg:hidden mt-5 flex flex-col gap-4 items-center" data-fade-up>
+          <MarketPulse pulse={snapshot} />
+          <TrendingList limit={3} heat={heat} tokens={tokens} />
         </div>
       </div>
     </section>
@@ -191,7 +175,6 @@ const HINT_TICKERS = ["$BONK", "$WIF", "$JUP", "$POPCAT", "$JTO", "$PYTH"] as co
 function TickerHint() {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
-    // Slowed from 2.2s → 4s — calmer ambient cycle
     const id = setInterval(
       () => setIdx((i) => (i + 1) % HINT_TICKERS.length),
       4000,
