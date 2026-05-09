@@ -171,11 +171,9 @@ body {
 }
 
 @keyframes heartbeat-dot {
-  0%, 100% { transform: scale(1); opacity: 0.85; }
-  20%      { transform: scale(1.6); opacity: 1; }
-  35%      { transform: scale(1.0); opacity: 0.9; }
-  50%      { transform: scale(1.3); opacity: 1; }
-  65%      { transform: scale(1.0); opacity: 0.85; }
+  /* Gentle ambient breathing — no sharp lub-dub spikes. */
+  0%, 100% { transform: scale(1.00); opacity: 0.85; }
+  50%      { transform: scale(1.25); opacity: 1.00; }
 }
 
 @keyframes ripple {

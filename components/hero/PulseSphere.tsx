@@ -160,7 +160,8 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
           float mouseRipple = sin(position.y * 3.6 + uTime * 0.7) * uMouse.x * 0.08
                             + cos(position.x * 3.6 + uTime * 0.6) * uMouse.y * 0.08;
 
-          float pulseExpand = uPulse * 0.11;
+          // Softer pulse expansion — visible bulge, never a snap.
+          float pulseExpand = uPulse * 0.06;
           float disp = n * 0.13 + pulseExpand + mouseRipple;
           vDisp = disp;
 
@@ -216,12 +217,12 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
           col += vec3(1.0) * specKey * 1.35;
           col += uColorA * specFill * 0.32;
 
-          // Heartbeat green sparkle — only on the pulse peak, only on raised flow ridges
+          // Heartbeat green sparkle — gentler now, just a hint of green on the peak
           float sparkle = smoothstep(0.55, 0.95, vDisp + 0.5) * uPulse;
-          col = mix(col, uColorC, sparkle * 0.30);
+          col = mix(col, uColorC, sparkle * 0.18);
 
-          // Pulse-driven exposure lift
-          col *= (0.92 + uPulse * 0.42 + uHover * 0.10);
+          // Gentle pulse-driven exposure lift — no harsh flash
+          col *= (0.95 + uPulse * 0.20 + uHover * 0.08);
 
           // Dither to kill banding
           float d = (hash(gl_FragCoord.xy) - 0.5) / 255.0;
@@ -258,9 +259,10 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
         uniform float uPulse;
         varying vec3 vN;
         void main(){
+          // Gentler halo modulation — barely brightens with the pulse instead of flashing.
           float f = pow(1.0 - abs(vN.z), 4.0);
           vec3 col = mix(vec3(0.37, 0.36, 1.0), vec3(1.0, 0.18, 0.61), 0.55);
-          gl_FragColor = vec4(col, f * (0.13 + uPulse * 0.22));
+          gl_FragColor = vec4(col, f * (0.13 + uPulse * 0.10));
         }
       `,
     });
@@ -305,14 +307,15 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
       uniforms.uMouse.value.y += (targetMouseY - uniforms.uMouse.value.y) * 0.07;
       uniforms.uHover.value += (targetHover - uniforms.uHover.value) * 0.08;
 
-      // Heartbeat (lub-dub)
+      // Heartbeat — single smooth sin² bulge per cycle, capped low.
+      // The previous lub-dub Gaussian peaks felt twitchy at high BPM. A
+      // single rounded curve reads as ambient breathing, not a medical
+      // monitor. Cap at 0.55 so even peaks stay calm on the eye.
       const period = 60 / bpmRef.current;
       phase += dt / period;
       const t = phase % 1;
-      const beat =
-        Math.exp(-Math.pow((t - 0.08) * 11, 2)) * 1.0 +
-        Math.exp(-Math.pow((t - 0.22) * 16, 2)) * 0.5;
-      uniforms.uPulse.value = reduced ? 0.12 : Math.min(1.0, beat);
+      const beat = Math.pow(Math.sin(Math.PI * t), 2);
+      uniforms.uPulse.value = reduced ? 0.08 : Math.min(0.55, beat * 0.7);
 
       // Slow tilt + steady spin + levitation
       mesh.rotation.x += (targetMouseY * 0.28 - mesh.rotation.x) * 0.04;

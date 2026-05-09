@@ -7,11 +7,42 @@ import { TrendingList } from "./TrendingList";
 import { CaPasteBox } from "./CaPasteBox";
 import { AmbientOrbs } from "./AmbientOrbs";
 import { HeartbeatBadge } from "./HeartbeatBadge";
+import { computeHeat, heatToBpm } from "@/lib/utils/heat";
+import type { TrendingToken } from "@/types/token";
 
 export function Hero() {
-  const [bpm, setBpm] = useState(50);
+  // Baseline BPM is driven by current Solana market heat (avg abs 24h % change
+  // across the trending list). Hover and click apply transient overrides that
+  // briefly push the rate up, then the heart settles back to whatever the
+  // market is actually doing.
+  const [marketBpm, setMarketBpm] = useState(55);
+  const [transientBpm, setTransientBpm] = useState<number | null>(null);
+  const bpm = transientBpm ?? marketBpm;
   const [sphereSize, setSphereSize] = useState(440);
   const heroRef = useRef<HTMLElement>(null);
+
+  // Poll trending → heat → BPM. /api/trending is server-cached for 60s, so
+  // the cost is essentially free.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const r = await fetch("/api/trending", { cache: "no-store" });
+        if (!r.ok) return;
+        const json = (await r.json()) as { tokens: TrendingToken[] };
+        if (cancelled) return;
+        setMarketBpm(heatToBpm(computeHeat(json.tokens)));
+      } catch {
+        /* swallow */
+      }
+    };
+    refresh();
+    const id = setInterval(refresh, 45_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
   useEffect(() => {
     const compute = () => {
@@ -119,8 +150,12 @@ export function Hero() {
           <div className="relative flex items-center justify-center order-1 lg:order-2">
             <div
               data-sphere-in
-              onMouseEnter={() => setBpm(80)}
-              onMouseLeave={() => setBpm(50)}
+              onMouseEnter={() => {
+                // Transient lift on hover — push 12 BPM above the market baseline,
+                // capped so we don't blow past the badge's "Hot" threshold gratuitously.
+                setTransientBpm(Math.min(85, marketBpm + 12));
+              }}
+              onMouseLeave={() => setTransientBpm(null)}
             >
               <PulseSphere size={sphereSize} bpm={bpm} />
             </div>
@@ -147,9 +182,9 @@ export function Hero() {
       >
         <CaPasteBox
           onPulse={(kind) => {
-            if (kind === "valid") setBpm(160);
-            else setBpm(80);
-            setTimeout(() => setBpm(50), 2500);
+            // Submit spike — quick excitement, then back to market baseline.
+            setTransientBpm(kind === "valid" ? 130 : 78);
+            setTimeout(() => setTransientBpm(null), 2200);
           }}
         />
         <p className="mt-3.5 text-center text-[11px] sm:text-[12px] text-text-muted">
