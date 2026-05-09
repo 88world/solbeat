@@ -9,7 +9,7 @@ import type {
 import { cached } from "@/lib/cache/redis";
 import { TTL } from "@/config/constants";
 import { fetchBestSolanaPair } from "@/lib/data/dexscreener";
-import { getAsset, getTokenHolders } from "@/lib/data/helius";
+import { getAsset, getMintAccount, getTokenHolders } from "@/lib/data/helius";
 import { fetchTokenOverview } from "@/lib/data/birdeye";
 import { fetchCatalysts } from "@/lib/data/perplexity";
 import { fetchRecentTweets } from "@/lib/data/twitter";
@@ -26,22 +26,26 @@ export async function analyzeToken(ca: string): Promise<TokenAnalysis> {
 async function buildAnalysis(ca: string): Promise<TokenAnalysis> {
   const warnings: string[] = [];
 
-  const [asset, dexPair, birdeye] = await Promise.all([
+  const [asset, dexPair, birdeye, mintInfo] = await Promise.all([
     safe(() => getAsset(ca), "helius_metadata", warnings),
     safe(() => fetchBestSolanaPair(ca), "dexscreener_pair", warnings),
     safe(() => fetchTokenOverview(ca), "birdeye_overview", warnings),
+    // getAccountInfo (jsonParsed) — works on public RPC, gives authoritative
+    // on-chain supply, decimals, mint authority, freeze authority. The cheap
+    // path for the data DAS/Helius normally provides.
+    safe(() => getMintAccount(ca), "mint_account", warnings),
   ]);
 
   const metadata: TokenMetadata = {
     ca,
     name: asset?.name ?? dexPair?.baseToken.name ?? null,
     symbol: asset?.symbol ?? dexPair?.baseToken.symbol ?? null,
-    decimals: asset?.decimals ?? null,
-    supply: asset?.supply ?? null,
+    decimals: asset?.decimals ?? mintInfo?.decimals ?? null,
+    supply: asset?.supply ?? mintInfo?.supply ?? null,
     image: asset?.image ?? dexPair?.info?.imageUrl ?? null,
     description: asset?.description ?? null,
-    mint_authority: asset?.mint_authority ?? null,
-    freeze_authority: asset?.freeze_authority ?? null,
+    mint_authority: asset?.mint_authority ?? mintInfo?.mintAuthority ?? null,
+    freeze_authority: asset?.freeze_authority ?? mintInfo?.freezeAuthority ?? null,
     is_mutable: asset?.is_mutable ?? null,
     age_hours: dexPair?.pairCreatedAt
       ? Math.max(0, (Date.now() - dexPair.pairCreatedAt) / 3_600_000)

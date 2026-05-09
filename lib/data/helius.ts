@@ -48,6 +48,60 @@ type DasAsset = {
   ownership?: { owner?: string };
 };
 
+type ParsedMintInfo = {
+  decimals: number;
+  freezeAuthority: string | null;
+  isInitialized: boolean;
+  mintAuthority: string | null;
+  supply: string;
+};
+
+type ParsedAccountResp = {
+  value: {
+    data: {
+      parsed?: { type: string; info: ParsedMintInfo };
+      program?: string;
+    };
+    owner?: string;
+    lamports?: number;
+  } | null;
+};
+
+/**
+ * Reads authoritative on-chain mint state via getAccountInfo with the
+ * jsonParsed encoding. Works on the *public* Solana RPC — no API key needed —
+ * and is the cheapest way to surface supply, decimals, mint authority, and
+ * freeze authority for any SPL token.
+ */
+export async function getMintAccount(mint: string): Promise<{
+  supply: number;
+  decimals: number;
+  mintAuthority: string | null;
+  freezeAuthority: string | null;
+} | null> {
+  const result = await rpc<ParsedAccountResp>(
+    "getAccountInfo",
+    [mint, { encoding: "jsonParsed" }],
+  );
+  const parsed = result?.value?.data?.parsed;
+  if (!parsed || parsed.type !== "mint") return null;
+  const info = parsed.info;
+  if (!info || typeof info.decimals !== "number") return null;
+  // Supply comes back as a base-units string; divide by 10^decimals for UI amount.
+  let supply: number;
+  try {
+    supply = Number(BigInt(info.supply)) / Math.pow(10, info.decimals);
+  } catch {
+    return null;
+  }
+  return {
+    supply,
+    decimals: info.decimals,
+    mintAuthority: info.mintAuthority ?? null,
+    freezeAuthority: info.freezeAuthority ?? null,
+  };
+}
+
 export async function getAsset(mint: string): Promise<TokenMetadata | null> {
   const result = await rpc<DasAsset>("getAsset", { id: mint });
   if (!result) return null;

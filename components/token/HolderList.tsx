@@ -1,16 +1,41 @@
 import type { TokenHolders } from "@/types/token";
 import { shortAddress } from "@/lib/utils";
 
-export function HolderList({ holders }: { holders: TokenHolders }) {
+export function HolderList({
+  holders,
+  ca,
+}: {
+  holders: TokenHolders;
+  /** Optional — when provided, the empty state shows a Solscan deep link. */
+  ca?: string;
+}) {
   if (holders.top_20.length === 0) {
     return (
-      <div className="glass rounded-2xl p-5">
-        <h3 className="text-[10px] uppercase tracking-[0.2em] text-text-muted mb-2">
-          Top holders
-        </h3>
-        <p className="text-[13px] text-text-secondary">
-          Holder data not available for this token.
+      <div className="glass rounded-2xl p-5 sm:p-6">
+        <div className="flex items-baseline justify-between mb-3">
+          <h3 className="text-[10px] uppercase tracking-[0.2em] text-text-muted font-bold">
+            Top holders
+          </h3>
+        </div>
+        <p className="text-[13px] text-text-secondary leading-relaxed">
+          Top-holder breakdown needs an indexer (Helius free tier or Solscan)
+          — the public Solana RPC throttles{" "}
+          <code className="font-mono text-[12px] text-text-primary">
+            getTokenLargestAccounts
+          </code>
+          .
         </p>
+        {ca && (
+          <a
+            href={`https://solscan.io/token/${ca}#holders`}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 inline-flex items-center gap-1.5 px-3 h-8 rounded-full text-[11.5px] font-semibold border border-border-subtle hover:border-border-emphasized text-text-primary transition"
+          >
+            View top holders on Solscan
+            <span className="text-text-muted text-[9px]" aria-hidden>↗</span>
+          </a>
+        )}
       </div>
     );
   }
@@ -20,7 +45,7 @@ export function HolderList({ holders }: { holders: TokenHolders }) {
   return (
     <div className="glass rounded-2xl p-5 sm:p-6">
       <div className="flex items-baseline justify-between mb-4">
-        <h3 className="text-[10px] uppercase tracking-[0.2em] text-text-muted">
+        <h3 className="text-[10px] uppercase tracking-[0.2em] text-text-muted font-bold">
           Top 20 holders
         </h3>
         {holders.top_10_pct != null && (
@@ -45,7 +70,7 @@ export function HolderList({ holders }: { holders: TokenHolders }) {
               >
                 {shortAddress(h.address, 4, 4)}
               </a>
-              <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div className="flex-1 h-1.5 bg-text-muted/15 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-accent-primary to-accent-pulse"
                   style={{ width: `${w}%` }}

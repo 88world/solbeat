@@ -7,6 +7,7 @@ import { shortAddress } from "@/lib/utils";
 export function TokenHeader({ analysis }: { analysis: TokenAnalysis }) {
   const { metadata } = analysis;
   const [copied, setCopied] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
 
   const copyCa = async () => {
     try {
@@ -18,26 +19,45 @@ export function TokenHeader({ analysis }: { analysis: TokenAnalysis }) {
     }
   };
 
+  const showImage = metadata.image && !imgFailed;
+  const symbol = metadata.symbol?.replace(/^\$/, "").toUpperCase() ?? "";
+
   return (
     <div className="flex items-start gap-4">
-      <div className="size-16 sm:size-20 rounded-2xl overflow-hidden glass flex items-center justify-center shrink-0">
-        {metadata.image ? (
+      <div
+        className="size-16 sm:size-20 rounded-2xl overflow-hidden flex items-center justify-center shrink-0"
+        style={{
+          background: "rgba(255, 255, 255, 0.7)",
+          border: "1px solid rgba(10, 10, 30, 0.06)",
+          boxShadow: "0 6px 16px rgba(10, 10, 30, 0.05)",
+        }}
+      >
+        {showImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={metadata.image}
+            src={metadata.image!}
             alt={metadata.symbol ?? "token"}
             className="size-full object-cover"
             referrerPolicy="no-referrer"
+            loading="lazy"
+            onError={() => setImgFailed(true)}
           />
         ) : (
-          <div className="size-full bg-gradient-to-br from-accent-primary/30 to-accent-pulse/30 flex items-center justify-center text-text-secondary text-xs">
-            {metadata.symbol?.slice(0, 3) ?? "—"}
+          <div
+            className="size-full flex items-center justify-center text-[14px] font-bold text-white tracking-wide"
+            style={{
+              background:
+                "linear-gradient(135deg, #ff2d9c 0%, #5e5cff 60%, #14f195 100%)",
+            }}
+          >
+            {symbol.slice(0, 3) || "—"}
           </div>
         )}
       </div>
-      <div className="min-w-0">
+
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-[28px] sm:text-[36px] font-semibold leading-tight tracking-tight">
+          <h1 className="text-[28px] sm:text-[36px] font-semibold leading-tight tracking-tight text-text-primary">
             {metadata.name ?? "Unknown token"}
           </h1>
           {metadata.symbol && (
@@ -46,19 +66,55 @@ export function TokenHeader({ analysis }: { analysis: TokenAnalysis }) {
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={copyCa}
-          className="mt-2 inline-flex items-center gap-2 px-2 py-1 rounded-md text-[11px] text-mono text-text-secondary hover:text-text-primary hover:bg-white/5 transition"
-          title="Copy contract address"
-        >
-          <span>{shortAddress(metadata.ca, 6, 6)}</span>
-          <span className="text-text-muted">·</span>
-          <span className="text-text-muted">
-            {copied ? "Copied" : "Copy"}
-          </span>
-        </button>
+
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={copyCa}
+            className="inline-flex items-center gap-2 px-2 py-1 rounded-md text-[11px] text-mono text-text-secondary hover:text-text-primary hover:bg-text-muted/10 transition"
+            title={metadata.ca}
+          >
+            <span>{shortAddress(metadata.ca, 6, 6)}</span>
+            <span className="text-text-muted">·</span>
+            <span className="text-text-muted">{copied ? "Copied" : "Copy"}</span>
+          </button>
+
+          <span className="text-text-muted text-[10px]">·</span>
+
+          <ExternalLink
+            href={`https://solscan.io/token/${metadata.ca}`}
+            label="Solscan"
+          />
+          <ExternalLink
+            href={`https://birdeye.so/token/${metadata.ca}?chain=solana`}
+            label="Birdeye"
+          />
+          <ExternalLink
+            href={`https://dexscreener.com/solana/${metadata.ca}`}
+            label="DexScreener"
+          />
+          {metadata.symbol && (
+            <ExternalLink
+              href={`https://x.com/search?q=%24${encodeURIComponent(metadata.symbol)}&src=typed_query&f=live`}
+              label="X feed"
+            />
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+function ExternalLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-semibold text-text-secondary hover:text-text-primary hover:bg-text-muted/10 transition"
+    >
+      {label}
+      <span className="text-[8px] text-text-muted" aria-hidden>↗</span>
+    </a>
   );
 }

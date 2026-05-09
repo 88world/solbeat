@@ -143,7 +143,7 @@ export default async function TokenPage({ params }: PageProps) {
         <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-5 lg:gap-7">
           <div className="space-y-5">
             <PriceCard analysis={analysis} />
-            <HolderList holders={analysis.holders} />
+            <HolderList holders={analysis.holders} ca={analysis.metadata.ca} />
           </div>
 
           <div className="space-y-5">
