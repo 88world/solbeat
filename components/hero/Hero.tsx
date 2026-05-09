@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { animate, stagger } from "animejs";
 import { PulseSphere } from "./PulseSphere";
 import { TrendingList } from "./TrendingList";
@@ -19,20 +20,25 @@ export function Hero() {
   const [transientHeat, setTransientHeat] = useState<number | null>(null);
   const heat = transientHeat ?? snapshot?.heat ?? 0.2;
 
-  const [sphereSize, setSphereSize] = useState(340);
+  const [sphereSize, setSphereSize] = useState(560);
   const heroRef = useRef<HTMLElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const compute = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
+      // Bumped substantially — canvas now has to fit the central sphere PLUS
+      // orbiting token satellites (orbit radius up to 3.5 in world space).
+      // Sphere itself appears smaller within the canvas; the surrounding area
+      // is for the satellite system.
       let target: number;
-      if (w < 480) target = 240;
-      else if (w < 768) target = 280;
-      else if (w < 1100) target = 300;
-      else if (w < 1440) target = 320;
-      else target = 360;
-      target = Math.min(target, Math.floor(h * 0.46));
+      if (w < 480) target = 360;
+      else if (w < 768) target = 440;
+      else if (w < 1100) target = 480;
+      else if (w < 1440) target = 540;
+      else target = 600;
+      target = Math.min(target, Math.floor(h * 0.72));
       setSphereSize(target);
     };
     compute();
@@ -151,7 +157,12 @@ export function Hero() {
             </div>
 
             <div data-sphere-in>
-              <PulseSphere size={sphereSize} heat={heat} />
+              <PulseSphere
+                size={sphereSize}
+                heat={heat}
+                tokens={tokens}
+                onTokenClick={(ca) => router.push(`/token/${ca}`)}
+              />
             </div>
           </div>
         </div>
