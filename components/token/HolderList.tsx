@@ -18,12 +18,7 @@ export function HolderList({
           </h3>
         </div>
         <p className="text-[13px] text-text-secondary leading-relaxed">
-          Top-holder breakdown needs an indexer (Helius free tier or Solscan)
-          — the public Solana RPC throttles{" "}
-          <code className="font-mono text-[12px] text-text-primary">
-            getTokenLargestAccounts
-          </code>
-          .
+          Top-holder breakdown isn&apos;t available in this view.
         </p>
         {ca && (
           <a

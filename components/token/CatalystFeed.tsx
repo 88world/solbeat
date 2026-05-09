@@ -8,9 +8,7 @@ export function CatalystFeed({ catalysts }: { catalysts: CatalystItem[] }) {
           Catalysts
         </h3>
         <p className="text-[13px] text-text-secondary">
-          No recent catalysts surfaced. The Perplexity-driven feed is empty
-          either because nothing newsworthy hit the wire in the last 24h, or
-          the Perplexity API key is unconfigured.
+          Nothing newsworthy in the last 24 hours.
         </p>
       </div>
     );

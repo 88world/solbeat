@@ -68,11 +68,11 @@ export default async function TokenPage({ params }: PageProps) {
               Couldn&apos;t find this token.
             </h1>
             <p className="mt-4 text-[14px] text-text-secondary leading-relaxed">
-              We checked DexScreener, Helius, and Birdeye for{" "}
+              We came up empty on{" "}
               <code className="font-mono text-[13px] px-2 py-0.5 rounded-md bg-text-muted/8 text-text-primary">
                 {shortAddress(ca, 6, 6)}
-              </code>{" "}
-              and came up empty.
+              </code>
+              . No market data, no on-chain metadata.
             </p>
 
             <div className="mt-6 space-y-3">
@@ -153,13 +153,6 @@ export default async function TokenPage({ params }: PageProps) {
             <RecentTweets tweets={analysis.tweets} />
           </div>
         </div>
-
-        {analysis.warnings.length > 0 && (
-          <div className="mt-8 text-[11px] text-text-muted">
-            Some upstream sources were unavailable: {analysis.warnings.join(", ")}.
-            Results may be partial.
-          </div>
-        )}
 
         <SwapPanel analysis={analysis} />
       </main>

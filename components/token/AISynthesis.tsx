@@ -74,9 +74,8 @@ function SynthesisFallback() {
   return (
     <div className="space-y-3">
       <p className="text-[13px] text-text-secondary">
-        Synthesis unavailable. The reasoning layer needs an Anthropic API key
-        configured. The on-chain data and market panels still load with full
-        fidelity.
+        The pulse is offline for this token right now. On-chain data and market
+        panels still load with full fidelity below.
       </p>
       <div className="space-y-2">
         <div className="h-3 rounded animate-shimmer w-full" />
