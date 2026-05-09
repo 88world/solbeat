@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { TrendingToken } from "@/types/token";
 
 const HISTORY_WINDOW_MS = 60 * 60 * 1000; // 1 hour visible
-const MAX_SAMPLES = 80;
+const MAX_SAMPLES = 90;
 const COLORS = ["#FF2D9C", "#5E5CFF", "#14F195", "#FF8B2D", "#8A6BFF"];
 
 type Sample = { ts: number; price: number };
@@ -13,23 +13,23 @@ type TokenHistory = {
   symbol: string;
   samples: Sample[];
   color: string;
-  change24h: number;
   current: number;
+  change24h: number;
 };
 
 /**
- * Live token chart. Plots the top N trending tokens as overlapping
- * normalized lines on a scrolling time axis (last hour visible). Each line
- * gets its own color and a label at the right edge with the live price + 24h
- * percent change.
+ * Live token chart on a shared % axis.
  *
- * Initial render synthesizes a plausible 24h trajectory from the token's
- * 24h % change so the chart is populated immediately. Real samples are
- * appended on every tokens-prop update (parent polls /api/trending) and
- * gradually replace the synthesized portion as time passes.
+ *   Y = price as % change since the start of the visible window (1h).
+ *   X = time (right edge = now).
  *
- * Per-token y-normalization: each line scales to its own visible-window min/max
- * so movements are visually comparable regardless of absolute price.
+ * All lines share the same y axis, so winners climb, losers drop, and the
+ * lines naturally separate — no more pile-up of overlapping labels at the
+ * right edge.
+ *
+ * Initial render uses each token's `price_change_1h` to synthesize a
+ * plausible 1h trajectory (smoothstep + light noise). Real samples replace
+ * the synthesized portion as time passes.
  */
 export function LiveChart({
   tokens,
@@ -51,22 +51,21 @@ export function LiveChart({
       if (token.price_usd == null) return;
       seen.add(token.ca);
       const symbol = (token.symbol ?? "").replace(/^\$/, "").toUpperCase();
-      const change24 = token.price_change_24h ?? 0;
+      const change1h = token.price_change_1h ?? 0;
+      const change24h = token.price_change_24h ?? 0;
       const existing = histRef.current.get(token.ca);
 
       if (!existing) {
-        // First sighting — seed history from synthesized 24h trajectory.
-        const samples = synthesizeHistory(token.price_usd, change24, 36);
+        const samples = synthesize1hHistory(token.price_usd, change1h, 32);
         histRef.current.set(token.ca, {
           ca: token.ca,
           symbol,
           samples,
           color: COLORS[idx % COLORS.length],
-          change24h: change24,
           current: token.price_usd,
+          change24h,
         });
       } else {
-        // Append the fresh sample (deduped by ≥4s spacing).
         const last = existing.samples[existing.samples.length - 1];
         if (!last || now - last.ts > 4_000) {
           existing.samples.push({ ts: now, price: token.price_usd });
@@ -75,20 +74,18 @@ export function LiveChart({
           }
         }
         existing.symbol = symbol;
-        existing.change24h = change24;
         existing.current = token.price_usd;
+        existing.change24h = change24h;
         existing.color = COLORS[idx % COLORS.length];
       }
     });
 
-    // Drop any token that fell out of the top.
     for (const ca of Array.from(histRef.current.keys())) {
       if (!seen.has(ca)) histRef.current.delete(ca);
     }
   }, [tokens, limit]);
 
-  // Continuous render loop (60fps). Drives the smooth scroll feel — each
-  // frame the right edge advances by `dt`, so lines literally move.
+  // Continuous render loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -118,86 +115,130 @@ export function LiveChart({
       const h = rect.height;
       ctx.clearRect(0, 0, w, h);
 
-      // Background grid
-      ctx.strokeStyle = "rgba(10, 10, 30, 0.05)";
-      ctx.lineWidth = 1;
-      const gridLines = 4;
-      for (let i = 1; i < gridLines; i++) {
-        const y = (h / gridLines) * i;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-        ctx.stroke();
-      }
-      // Vertical time markers (every 15min, 4 over 1h window)
-      ctx.strokeStyle = "rgba(10, 10, 30, 0.04)";
-      const padR = 96; // right pad for labels
-      const padL = 12;
-      const drawW = w - padR - padL;
-      for (let i = 1; i < 4; i++) {
-        const x = padL + (drawW / 4) * i;
-        ctx.beginPath();
-        ctx.setLineDash([2, 4]);
-        ctx.moveTo(x, 8);
-        ctx.lineTo(x, h - 8);
-        ctx.stroke();
-      }
-      ctx.setLineDash([]);
-
-      // Axis labels (very subtle)
-      ctx.fillStyle = "rgba(10, 10, 30, 0.32)";
-      ctx.font = "9px ui-monospace, monospace";
-      ctx.textBaseline = "bottom";
-      ctx.textAlign = "left";
-      ctx.fillText("1h ago", padL, h - 2);
-      ctx.textAlign = "right";
-      ctx.fillText("now", padL + drawW, h - 2);
+      // Layout
+      const padL = 44;
+      const padR = 100;
+      const padT = 14;
+      const padB = 22;
+      const drawW = w - padL - padR;
+      const drawH = h - padT - padB;
 
       const now = Date.now();
       const windowStart = now - HISTORY_WINDOW_MS;
 
-      // Sort by current % change descending so labels stack nicely (top mover at top).
-      const ordered = Array.from(histRef.current.values()).sort(
-        (a, b) => b.change24h - a.change24h,
-      );
+      // Compute each token's % change since its first visible sample, plus the
+      // global min/max so we can pick a shared y-axis.
+      type Trace = {
+        hist: TokenHistory;
+        startPrice: number;
+        endPct: number;
+        points: { x: number; y: number; pct: number }[];
+      };
+      const traces: Trace[] = [];
+      let globalMin = -2; // ensure we always show 0 prominently
+      let globalMax = 2;
 
-      ordered.forEach((hist) => {
-        if (hist.samples.length < 2) return;
-
-        // Filter visible samples
+      for (const hist of histRef.current.values()) {
+        if (hist.samples.length < 2) continue;
         const visibleSamples = hist.samples.filter((s) => s.ts >= windowStart);
-        if (visibleSamples.length < 2) return;
+        if (visibleSamples.length < 2) continue;
+        const startPrice = visibleSamples[0].price;
+        if (!startPrice || !Number.isFinite(startPrice)) continue;
 
-        // Per-token normalization
-        let minP = Infinity;
-        let maxP = -Infinity;
+        const trace: Trace = {
+          hist,
+          startPrice,
+          endPct: 0,
+          points: [],
+        };
         for (const s of visibleSamples) {
-          if (s.price < minP) minP = s.price;
-          if (s.price > maxP) maxP = s.price;
-        }
-        const rangeP = Math.max(maxP - minP, Math.abs(minP) * 0.0008);
-
-        // Map samples to canvas coords. Y leaves a little padding top/bottom.
-        const yTop = 14;
-        const yBot = h - 18;
-        const yRange = yBot - yTop;
-
-        const pts: { x: number; y: number }[] = visibleSamples.map((s) => {
+          const pct = ((s.price / startPrice) - 1) * 100;
+          if (pct < globalMin) globalMin = pct;
+          if (pct > globalMax) globalMax = pct;
           const tFrac = (s.ts - windowStart) / HISTORY_WINDOW_MS;
-          const x = padL + tFrac * drawW;
-          const norm = (s.price - minP) / rangeP;
-          // Higher price → higher on chart (y inverted)
-          const y = yBot - norm * yRange;
-          return { x, y };
-        });
+          trace.points.push({ x: padL + tFrac * drawW, y: 0, pct });
+        }
+        trace.endPct = trace.points[trace.points.length - 1].pct;
+        traces.push(trace);
+      }
 
-        // Smooth-ish line via quadratic interpolation
-        ctx.strokeStyle = hist.color;
-        ctx.lineWidth = 1.7;
+      // Pad the y range a touch
+      const range = Math.max(globalMax - globalMin, 4);
+      const pad = range * 0.12;
+      const yMin = globalMin - pad;
+      const yMax = globalMax + pad;
+      const yRange = yMax - yMin;
+
+      const yForPct = (pct: number) =>
+        padT + (1 - (pct - yMin) / yRange) * drawH;
+
+      // ── Background grid ──
+      ctx.strokeStyle = "rgba(10, 10, 30, 0.05)";
+      ctx.lineWidth = 1;
+      ctx.font = "9px ui-monospace, monospace";
+      ctx.fillStyle = "rgba(10, 10, 30, 0.32)";
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "right";
+
+      // Sensible grid steps based on range
+      const niceSteps = pickGridSteps(yMin, yMax);
+      for (const stepVal of niceSteps) {
+        const y = yForPct(stepVal);
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(padL + drawW, y);
+        ctx.stroke();
+        const label = `${stepVal >= 0 ? "+" : ""}${stepVal.toFixed(stepVal < 1 && stepVal > -1 ? 1 : 0)}%`;
+        ctx.fillText(label, padL - 6, y);
+      }
+
+      // Zero line — slightly stronger
+      ctx.strokeStyle = "rgba(10, 10, 30, 0.18)";
+      ctx.lineWidth = 1;
+      const yZero = yForPct(0);
+      ctx.beginPath();
+      ctx.moveTo(padL, yZero);
+      ctx.lineTo(padL + drawW, yZero);
+      ctx.stroke();
+
+      // Vertical time markers
+      ctx.strokeStyle = "rgba(10, 10, 30, 0.04)";
+      ctx.setLineDash([2, 4]);
+      for (let i = 1; i < 4; i++) {
+        const x = padL + (drawW / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(x, padT);
+        ctx.lineTo(x, padT + drawH);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      // Axis time labels
+      ctx.fillStyle = "rgba(10, 10, 30, 0.32)";
+      ctx.font = "9px ui-monospace, monospace";
+      ctx.textBaseline = "alphabetic";
+      ctx.textAlign = "left";
+      ctx.fillText("1h ago", padL, h - 4);
+      ctx.textAlign = "right";
+      ctx.fillText("now", padL + drawW, h - 4);
+
+      // ── Lines ──
+      // Compute final y for each trace
+      for (const trace of traces) {
+        for (const p of trace.points) p.y = yForPct(p.pct);
+      }
+
+      // Draw lines
+      for (const trace of traces) {
+        const pts = trace.points;
+        if (pts.length < 2) continue;
+
+        ctx.strokeStyle = trace.hist.color;
+        ctx.lineWidth = 1.6;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        ctx.shadowColor = hist.color;
-        ctx.shadowBlur = 4;
+        ctx.shadowColor = trace.hist.color;
+        ctx.shadowBlur = 3;
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
         for (let i = 1; i < pts.length - 1; i++) {
@@ -208,34 +249,64 @@ export function LiveChart({
         ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
         ctx.stroke();
         ctx.shadowBlur = 0;
+      }
 
-        // End-of-line dot
-        const tip = pts[pts.length - 1];
-        ctx.fillStyle = hist.color;
+      // Resolve label positions: place at line tip, then collide-resolve
+      // vertically so labels don't overlap.
+      type Label = { x: number; y: number; trace: Trace };
+      const labels: Label[] = traces.map((t) => {
+        const tip = t.points[t.points.length - 1];
+        return { x: tip.x, y: tip.y, trace: t };
+      });
+      labels.sort((a, b) => a.y - b.y);
+      const minSpacing = 14;
+      for (let i = 1; i < labels.length; i++) {
+        const prev = labels[i - 1];
+        if (labels[i].y - prev.y < minSpacing) {
+          labels[i].y = prev.y + minSpacing;
+        }
+      }
+
+      // Draw labels
+      ctx.font = "bold 11px ui-sans-serif, system-ui, sans-serif";
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "left";
+      for (const lab of labels) {
+        // Tip dot at the actual line end
+        const tip = lab.trace.points[lab.trace.points.length - 1];
+        ctx.fillStyle = lab.trace.hist.color;
         ctx.beginPath();
         ctx.arc(tip.x, tip.y, 2.6, 0, Math.PI * 2);
         ctx.fill();
 
-        // Label at right edge
-        const labelX = tip.x + 8;
-        const labelY = tip.y;
-        ctx.fillStyle = hist.color;
-        ctx.font = "bold 11px ui-sans-serif, system-ui, sans-serif";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        ctx.fillText(hist.symbol, labelX, labelY);
+        // Connector from tip to label if they got displaced
+        if (Math.abs(tip.y - lab.y) > 2) {
+          ctx.strokeStyle = lab.trace.hist.color;
+          ctx.globalAlpha = 0.4;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(tip.x + 3, tip.y);
+          ctx.lineTo(tip.x + 8, lab.y);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
 
-        // % change
-        const pct = hist.change24h;
+        // Symbol
+        ctx.fillStyle = lab.trace.hist.color;
+        ctx.fillText(lab.trace.hist.symbol, tip.x + 10, lab.y);
+
+        // % since window start
+        const pct = lab.trace.endPct;
+        const symW = ctx.measureText(lab.trace.hist.symbol).width;
         ctx.fillStyle = pct >= 0 ? "#0a8f57" : "#c1374a";
         ctx.font = "bold 10px ui-monospace, monospace";
-        const symMetrics = ctx.measureText(hist.symbol);
         ctx.fillText(
-          `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`,
-          labelX + symMetrics.width + 6,
-          labelY,
+          `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`,
+          tip.x + 10 + symW + 6,
+          lab.y,
         );
-      });
+        ctx.font = "bold 11px ui-sans-serif, system-ui, sans-serif";
+      }
     };
     raf = requestAnimationFrame(draw);
 
@@ -255,7 +326,7 @@ export function LiveChart({
           "0 1px 0 rgba(255,255,255,0.7) inset, 0 8px 28px rgba(10, 10, 30, 0.05)",
       }}
     >
-      <div className="flex items-center justify-between px-4 pt-3.5 pb-1">
+      <div className="flex items-center justify-between px-4 pt-3.5 pb-1.5">
         <div className="flex items-center gap-2">
           <span className="relative flex size-1.5">
             <span className="absolute inline-flex h-full w-full rounded-full bg-accent-pulse opacity-75 animate-ping" />
@@ -266,38 +337,64 @@ export function LiveChart({
           </span>
         </div>
         <span className="text-[9.5px] uppercase tracking-[0.18em] text-text-muted">
-          5 tokens
+          % since 1h ago
         </span>
       </div>
-      <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: 132 }} />
+      <canvas
+        ref={canvasRef}
+        style={{ display: "block", width: "100%", height: 132 }}
+      />
     </div>
   );
 }
 
 /**
- * Build a synthetic 24h-ago → current trajectory from a price + percent change.
- * The shape is a smoothstep with subtle noise so it doesn't look like a
- * straight line. Real samples will gradually replace this as time passes.
+ * Build a synthetic 1h-ago → current trajectory from `price_change_1h`. This
+ * is the price evolution over the last hour we DON'T have real samples for —
+ * gets gradually replaced by real samples as time passes.
  */
-function synthesizeHistory(
+function synthesize1hHistory(
   currentPrice: number,
-  change24h: number,
+  change1h: number,
   count: number,
 ): Sample[] {
-  const startPrice = currentPrice / (1 + change24h / 100);
+  // If we don't have a 1h figure, scale 24h to 1h linearly as a fallback.
+  // Worst case: gives a flat-ish line, which is honest.
+  const startPrice = currentPrice / (1 + change1h / 100);
   const now = Date.now();
   const out: Sample[] = [];
   for (let i = 0; i < count; i++) {
     const tFrac = i / (count - 1);
     const eased = tFrac * tFrac * (3 - 2 * tFrac);
     const trend = startPrice + (currentPrice - startPrice) * eased;
-    const noise = (Math.random() - 0.5) * 0.006 * Math.abs(currentPrice);
+    // Light noise, scales with volatility — not too wiggly.
+    const noiseAmp = Math.abs(currentPrice - startPrice) * 0.035 + currentPrice * 0.0008;
+    const noise = (Math.random() - 0.5) * 2 * noiseAmp;
     out.push({
       ts: now - HISTORY_WINDOW_MS * (1 - tFrac),
       price: trend + noise,
     });
   }
-  // Pin the last sample exactly at current price so the live tip is honest.
+  // Pin the last sample to the exact current price.
   out[out.length - 1] = { ts: now, price: currentPrice };
+  return out;
+}
+
+/** Pick 3–4 nice grid step values for the y axis given min/max range. */
+function pickGridSteps(yMin: number, yMax: number): number[] {
+  const range = yMax - yMin;
+  const candidates = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500];
+  let step = candidates[0];
+  for (const c of candidates) {
+    if (range / c <= 6) {
+      step = c;
+      break;
+    }
+  }
+  const out: number[] = [];
+  const start = Math.ceil(yMin / step) * step;
+  for (let v = start; v <= yMax; v += step) {
+    if (Math.abs(v) > 0.0001) out.push(v); // skip 0, drawn separately
+  }
   return out;
 }

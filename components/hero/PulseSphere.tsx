@@ -297,48 +297,77 @@ const FRAG = /* glsl */ `
     vec3 N = normalize(vNormal);
     vec3 V = normalize(vViewDir);
 
-    // Fresnel — strong rim, translucent center
+    // ── Lighting setup: KEY light from upper-right + RIM light from lower-left ──
+    // Two-light setup gives the sphere genuine three-dimensionality. The rim
+    // light on the dark side adds a counter-color that breaks the
+    // "uniform bowling ball" look — the side facing away from the key isn't
+    // black, it has a cool glow from the back.
+    vec3 keyDir  = normalize(vec3( 0.55,  0.85,  1.00));
+    vec3 backDir = normalize(vec3(-0.65, -0.40, -0.30));
+
+    float NdotKey  = dot(N, keyDir);
+    float NdotBack = dot(N, backDir);
+
+    // Half-Lambert on key — soft wraparound diffuse
+    float halfLamb = NdotKey * 0.5 + 0.5;
+    halfLamb = halfLamb * halfLamb;
+
+    // Back-light rim (only contributes on the dark side)
+    float backRim = max(0.0, NdotBack);
+    backRim = pow(backRim, 2.0);
+
+    // Fresnel — strong rim, defines silhouette
     float ndotv = clamp(dot(V, N), 0.0, 1.0);
     float fres = 1.0 - ndotv;
-    float fresRim = pow(fres, 2.4);
+    float fresRim = pow(fres, 2.0);
 
-    // Deep restrained core colors. Even at heat 1.0 we don't hit pure pink.
-    vec3 coldCore = vec3(0.10, 0.13, 0.55);
-    vec3 hotCore  = vec3(0.50, 0.10, 0.36);
+    // ── Color palette ──
+    // Deep, restrained cores — never max saturation.
+    vec3 coldCore = vec3(0.08, 0.12, 0.55);
+    vec3 hotCore  = vec3(0.42, 0.10, 0.36);
     vec3 baseCore = mix(coldCore, hotCore, uHeat);
 
-    // Soft rim accents that the fresnel multiplies.
-    vec3 coldRim = vec3(0.55, 0.55, 1.00);
-    vec3 hotRim  = vec3(1.00, 0.42, 0.72);
-    vec3 rim = mix(coldRim, hotRim, uHeat);
+    // Bright rim accents — fresnel multiplies these (hot-side glow on the curve).
+    vec3 coldRim = vec3(0.60, 0.62, 1.00);
+    vec3 hotRim  = vec3(1.00, 0.44, 0.70);
+    vec3 keyRim = mix(coldRim, hotRim, uHeat);
 
-    // Surface noise shifts the body luminance a touch
+    // Counter-color back rim — opposite of the heat color so the dark side
+    // doesn't go black. At heat 1.0 (hot/pink), the back glows COOL (cyan-blue).
+    // At heat 0.0 (cold/blue), the back glows WARM (peach-pink). This is the
+    // single biggest fix to "uniform color blob" — surfaces always have a
+    // counter-light from the back.
+    vec3 hotBack  = vec3(0.20, 0.55, 0.95);   // cool cyan-blue when sphere is hot
+    vec3 coldBack = vec3(0.95, 0.55, 0.65);   // warm peach when sphere is cold
+    vec3 backTint = mix(coldBack, hotBack, uHeat);
+
+    // Slight surface tint from noise
     float n = vNoise * 0.5 + 0.5;
-    baseCore *= 0.85 + n * 0.30;
+    baseCore *= 0.82 + n * 0.34;
 
-    // Half-Lambert diffuse — defines the shape without crushing to black
-    vec3 lightDir = normalize(vec3(0.5, 0.8, 1.0));
-    float NdotL = dot(N, lightDir);
-    float halfLambert = NdotL * 0.5 + 0.5;
-    halfLambert = halfLambert * halfLambert;
+    // ── Specular: soft, broad sheen ──
+    vec3 R = reflect(-keyDir, N);
+    float spec = pow(max(dot(V, R), 0.0), 14.0);
 
-    // Soft Phong specular (low exponent → broad sheen, no aliased razor)
-    vec3 R = reflect(-lightDir, N);
-    float spec = pow(max(dot(V, R), 0.0), 12.0);
-
-    // Compose
-    vec3 col = baseCore * (0.40 + halfLambert * 0.60);
-    col += vec3(1.0) * spec * 0.18;
-    col += rim * fresRim * 0.55;
-
-    // Breath glow — visible color lift on each beat
-    col += rim * uBreath * 0.18 * (0.4 + uHeat * 0.6);
+    // ── Compose ──
+    // Body: deep core, lit by key
+    vec3 col = baseCore * (0.30 + halfLamb * 0.65);
+    // Counter-light fills the dark side with the contrast color
+    col += backTint * backRim * 0.32;
+    // Specular sheen
+    col += vec3(1.0) * spec * 0.22;
+    // Fresnel rim — strong, defines silhouette
+    col += keyRim * fresRim * 0.85;
+    // Breath glow on the rim — color lift on each beat
+    col += keyRim * uBreath * 0.22 * (0.4 + uHeat * 0.6);
 
     // Hover lift
     col *= 1.0 + uHover * 0.08;
 
-    // Mostly opaque, glassy at the very rim
-    float alpha = 0.92 + fres * 0.08;
+    // Glass: more translucent so the light bg shows through, especially at the
+    // rim. The front face is mostly opaque so the lighting reads, but the
+    // edge fades — gives the orb genuine depth instead of looking solid.
+    float alpha = 0.78 + fres * 0.20;
     gl_FragColor = vec4(col, alpha);
   }
 `;
