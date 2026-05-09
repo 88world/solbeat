@@ -10,15 +10,20 @@ type Props = {
   color?: string;
 };
 
+const VISIBLE_SECONDS = 4; // constant scroll-speed window (real ECG monitors do this)
+
 /**
- * Canvas-animated ECG trace. The waveform scrolls right-to-left at a rate
- * derived from the BPM — peaks pass at exactly the BPM cadence, so when the
- * sphere is beating at 78 BPM the trace is too. Shape is the standard PQRST
- * complex (P wave → QRS spike → T wave) drawn with a glowing stroke.
+ * Canvas-animated ECG trace with smooth motion.
  *
- * Pure 2D canvas, no React per-frame re-render. The component owns one
- * requestAnimationFrame loop that survives BPM changes (we just read the
- * latest BPM via a ref).
+ *   - Fixed-time window (4s visible). Scroll speed is constant regardless of
+ *     BPM — the *waveform spikes* get closer together when the heart races,
+ *     but the paper itself moves at the same rate. This is how real cardiac
+ *     monitors render and feels natural.
+ *   - Waveform built from Gaussian peaks (P, Q, R, S, T) instead of linear
+ *     ramps. The R spike is still iconic and tall, but the curve has no
+ *     angular corners — every transition is C¹ continuous.
+ *   - Canvas line drawn with quadratic Bezier interpolation between samples,
+ *     so the rendered stroke is C¹ smooth too.
  */
 export function ECGTrace({
   bpm,
@@ -36,7 +41,6 @@ export function ECGTrace({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Hi-DPI sharpness
     const dpr = Math.min(window.devicePixelRatio, 2);
     canvas.width = width * dpr;
     canvas.height = height * dpr;
@@ -54,7 +58,6 @@ export function ECGTrace({
 
       const w = width;
       const h = height;
-
       ctx.clearRect(0, 0, w, h);
 
       // Faint center reference line
@@ -65,46 +68,49 @@ export function ECGTrace({
       ctx.lineTo(w, h / 2);
       ctx.stroke();
 
+      // Fixed scroll cadence — visible window is always 4s
+      const pxPerSec = w / VISIBLE_SECONDS;
       const period = 60 / Math.max(20, bpmRef.current);
-      const cyclesVisible = 3.5;
-      const totalSeconds = cyclesVisible * period;
-      const pxPerSec = w / totalSeconds;
 
-      const samples = 240;
-      const points: [number, number][] = [];
-      for (let i = 0; i <= samples; i++) {
-        const x = (i / samples) * w;
+      const sampleCount = 360;
+      const points: Array<[number, number]> = new Array(sampleCount + 1);
+      for (let i = 0; i <= sampleCount; i++) {
+        const x = (i / sampleCount) * w;
         const t = timeSec - (w - x) / pxPerSec;
         const phase = ((t / period) % 1 + 1) % 1;
-        const y = h / 2 - ecgWave(phase) * h * 0.42;
-        points.push([x, y]);
+        const y = h / 2 - ecgWave(phase) * h * 0.40;
+        points[i] = [x, y];
       }
 
-      // Glow pass — fat blurred line underneath
+      // Smooth Bezier draw — use midpoints as anchors with each sample as a
+      // control point. C¹ continuous, no angular kinks.
+      const drawSmooth = () => {
+        ctx.beginPath();
+        ctx.moveTo(points[0][0], points[0][1]);
+        for (let i = 1; i < points.length - 1; i++) {
+          const xc = (points[i][0] + points[i + 1][0]) * 0.5;
+          const yc = (points[i][1] + points[i + 1][1]) * 0.5;
+          ctx.quadraticCurveTo(points[i][0], points[i][1], xc, yc);
+        }
+        ctx.lineTo(points[points.length - 1][0], points[points.length - 1][1]);
+        ctx.stroke();
+      };
+
+      // Glow pass (fat blurred line under the crisp one)
       ctx.shadowColor = color;
       ctx.shadowBlur = 10;
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(points[0][0], points[0][1]);
-      for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i][0], points[i][1]);
-      }
-      ctx.stroke();
+      drawSmooth();
 
       // Crisp top pass
       ctx.shadowBlur = 0;
       ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(points[0][0], points[0][1]);
-      for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i][0], points[i][1]);
-      }
-      ctx.stroke();
+      drawSmooth();
 
-      // Glowing dot at the right edge — the "stylus" tip
+      // Glowing stylus dot at the right edge — tracks the live waveform
       const lastY = points[points.length - 1][1];
       ctx.shadowColor = color;
       ctx.shadowBlur = 12;
@@ -128,16 +134,31 @@ export function ECGTrace({
   );
 }
 
-/** Standard PQRST complex, t in [0, 1]. */
+/**
+ * PQRST complex built from 5 Gaussian peaks. Smoother than piecewise-linear
+ * ramps — every transition is curved, no angular kinks. The R spike is still
+ * tall and narrow (iconic ECG look) but the stroke is C¹ continuous.
+ */
 function ecgWave(t: number): number {
-  if (t < 0.06) return 0;
-  if (t < 0.13) return 0.18 * Math.sin(((t - 0.06) / 0.07) * Math.PI); // P
-  if (t < 0.18) return 0;
-  if (t < 0.20) return -0.30 * ((t - 0.18) / 0.02); // Q dip
-  if (t < 0.22) return -0.30 + 1.55 * ((t - 0.20) / 0.02); // R rise
-  if (t < 0.24) return 1.25 - 1.55 * ((t - 0.22) / 0.02); // R fall
-  if (t < 0.27) return -0.30 + 0.30 * ((t - 0.24) / 0.03); // S → 0
-  if (t < 0.40) return 0;
-  if (t < 0.52) return 0.32 * Math.sin(((t - 0.40) / 0.12) * Math.PI); // T
-  return 0;
+  // P wave — smooth atrial depolarization bump
+  const p = 0.18 * gaussian(t, 0.10, 0.040);
+
+  // Q dip — narrow negative
+  const q = -0.30 * gaussian(t, 0.183, 0.013);
+
+  // R spike — tall narrow positive (the iconic peak)
+  const r = 1.30 * gaussian(t, 0.210, 0.012);
+
+  // S dip — short negative after R
+  const s = -0.25 * gaussian(t, 0.240, 0.015);
+
+  // T wave — broader repolarization bump
+  const tw = 0.32 * gaussian(t, 0.450, 0.075);
+
+  return p + q + r + s + tw;
+}
+
+function gaussian(t: number, center: number, width: number): number {
+  const d = (t - center) / width;
+  return Math.exp(-d * d);
 }
