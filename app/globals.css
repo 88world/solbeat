@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+:root {
+  /* SolBeat design tokens — dark, cinematic, calm */
+  --bg-primary: #0a0a0f;
+  --bg-elevated: #12121a;
+  --bg-glass: rgba(18, 18, 26, 0.6);
+
+  --text-primary: #f5f5fa;
+  --text-secondary: #a0a0b0;
+  --text-muted: #606070;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-emphasized: rgba(255, 255, 255, 0.12);
+
+  --accent-primary: #9945ff;     /* Solana purple */
+  --accent-secondary: #14f195;   /* Solana green */
+  --accent-pulse: #ff2d9c;       /* Block Valley pink — heartbeat */
+
+  --signal-positive: #14f195;
+  --signal-negative: #ff4757;
+  --signal-warning: #ffa502;
+  --signal-neutral: #a0a0b0;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration: 400ms;
+  --pulse-period: 1200ms;
+}
+
+@theme inline {
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-emphasized: var(--border-emphasized);
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-pulse: var(--accent-pulse);
+  --color-signal-positive: var(--signal-positive);
+  --color-signal-negative: var(--signal-negative);
+  --color-signal-warning: var(--signal-warning);
+  --color-signal-neutral: var(--signal-neutral);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-geist-sans);
+}
+
+html,
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), Inter, ui-sans-serif, system-ui;
+  font-feature-settings: "ss01", "cv02", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+body {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(153, 69, 255, 0.10), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 50% 100%, rgba(255, 45, 156, 0.06), transparent 60%),
+    var(--bg-primary);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(153, 69, 255, 0.35);
+  color: #fff;
+}
+
+/* Subtle scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* Reusable utility classes */
+.glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--border-subtle);
+}
+
+.text-display {
+  font-size: clamp(2.25rem, 6vw, 4.5rem);
+  letter-spacing: -0.03em;
+  font-weight: 600;
+  line-height: 1.02;
+}
+
+.text-mono {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-feature-settings: "tnum";
+}
+
+/* Pulse heartbeat keyframe — fallback for non-WebGL fallback element */
+@keyframes pulse-beat {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  20%      { transform: scale(1.08); opacity: 1; }
+  40%      { transform: scale(0.96); opacity: 0.9; }
+  60%      { transform: scale(1.02); opacity: 0.95; }
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes orbit-reverse {
+  from { transform: rotate(360deg); }
+  to   { transform: rotate(0deg); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in {
+  animation: fade-in 600ms var(--ease-out) both;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
