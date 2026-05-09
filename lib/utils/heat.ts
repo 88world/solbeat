@@ -1,4 +1,5 @@
 import type { TrendingToken } from "@/types/token";
+import type { SolMacro } from "@/lib/data/dexscreener";
 
 /**
  * Heat is composed of three independent market signals:
@@ -38,6 +39,7 @@ export type HeatSnapshot = {
   totalVolume: number;              // sum of 24h volumes
   topMover: TrendingToken | null;
   biggestDump: TrendingToken | null;
+  sol: SolMacro | null;             // SOL price macro reference
 };
 
 const VOLATILITY_REF = 18;        // top-3 |%| at which volatility = 1
@@ -45,8 +47,11 @@ const BREADTH_THRESHOLD = 3;      // % move that counts as "meaningful"
 const VOLUME_REF = 50_000_000;    // $50M total at which volume = 1 (log scale)
 const SENTIMENT_REF = 10;         // avg % at which sentiment saturates
 
-export function computeHeatSnapshot(tokens: TrendingToken[]): HeatSnapshot {
-  if (!tokens.length) return EMPTY_SNAPSHOT;
+export function computeHeatSnapshot(
+  tokens: TrendingToken[],
+  sol: SolMacro | null = null,
+): HeatSnapshot {
+  if (!tokens.length) return { ...EMPTY_SNAPSHOT, sol };
 
   const changes = tokens
     .map((t) => t.price_change_24h)
@@ -112,6 +117,7 @@ export function computeHeatSnapshot(tokens: TrendingToken[]): HeatSnapshot {
     totalVolume,
     topMover,
     biggestDump,
+    sol,
   };
 }
 
@@ -125,6 +131,7 @@ const EMPTY_SNAPSHOT: HeatSnapshot = {
   totalVolume: 0,
   topMover: null,
   biggestDump: null,
+  sol: null,
 };
 
 /** BPM range now 50..100 (was 50..85) — wider so a hot market is meaningfully different. */

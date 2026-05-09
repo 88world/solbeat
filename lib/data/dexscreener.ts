@@ -137,6 +137,23 @@ export async function fetchTrending(): Promise<TrendingToken[]> {
   }));
 }
 
+/** SOL macro — price + 24h change + 24h volume from the deepest SOL/USDC pair. */
+export type SolMacro = {
+  price_usd: number | null;
+  price_change_24h: number | null;
+  volume_24h: number | null;
+};
+
+export async function fetchSolMacro(): Promise<SolMacro | null> {
+  const pair = await fetchBestSolanaPair(SOL_MINT);
+  if (!pair) return null;
+  return {
+    price_usd: pair.priceUsd ? Number(pair.priceUsd) : null,
+    price_change_24h: pair.priceChange?.h24 ?? null,
+    volume_24h: pair.volume?.h24 ?? null,
+  };
+}
+
 async function fetchPairsByMints(mints: string[]): Promise<DexPair[]> {
   if (mints.length === 0) return [];
   const url = `${BASE}/latest/dex/tokens/${mints.join(",")}`;

@@ -51,10 +51,13 @@ export function Hero() {
       try {
         const r = await fetch("/api/trending", { cache: "no-store" });
         if (!r.ok) return;
-        const json = (await r.json()) as { tokens: TrendingToken[] };
+        const json = (await r.json()) as {
+          tokens: TrendingToken[];
+          sol?: import("@/lib/data/dexscreener").SolMacro | null;
+        };
         if (cancelled) return;
         setTokens(json.tokens);
-        setSnapshot(computeHeatSnapshot(json.tokens));
+        setSnapshot(computeHeatSnapshot(json.tokens, json.sol ?? null));
       } catch {
         /* swallow */
       }

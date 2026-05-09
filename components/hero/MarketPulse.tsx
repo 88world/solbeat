@@ -3,18 +3,20 @@
 import { useEffect, useState } from "react";
 import type { HeatSnapshot } from "@/lib/utils/heat";
 import { heatToBpm, heatLabel } from "@/lib/utils/heat";
-import { humanizeNumber, pctChange } from "@/lib/utils";
+import { humanizeNumber, humanizePrice, pctChange } from "@/lib/utils";
 import type { TrendingToken } from "@/types/token";
 import { ECGTrace } from "./ECGTrace";
 
 /**
- * Market vitals. Heart-monitor energy:
- *   - ECG trace at the top, scrolling right-to-left at the live BPM cadence
- *   - Huge tabular-num BPM digit display with a colored glow that matches the
- *     heat label (cool green → hot red)
- *   - Sentiment direction + gainers/losers split inline with the BPM
- *   - Compact heat-breakdown bars (volatility / breadth / volume)
- *   - Top mover and biggest dump pulled from the trending pool
+ * Market vitals — concrete numbers a Solana trader actually scans for, no
+ * abstract "Volatility / Breadth / Volume" bars:
+ *
+ *   - ECG trace at the top, scrolling at the live BPM cadence
+ *   - Big tabular-num BPM with heat-colored glow
+ *   - Sentiment direction + gainers/losers split
+ *   - SOL price + 24h % (the macro reference everyone watches)
+ *   - 24h trending volume (sum across the visible movers)
+ *   - Top mover + biggest dump pulled from trending
  */
 export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
   const [displayBpm, setDisplayBpm] = useState(55);
@@ -75,12 +77,12 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
         </span>
       </div>
 
-      {/* ECG trace */}
+      {/* ECG */}
       <div className="mb-3 -mx-1">
         <ECGTrace bpm={bpm} width={320} height={56} color={traceColor} />
       </div>
 
-      {/* Big BPM display */}
+      {/* BPM hero row */}
       <div className="flex items-end gap-3 mb-3">
         <div className="flex items-baseline gap-1.5">
           <span
@@ -123,52 +125,48 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
         </div>
       </div>
 
-      {/* Breakdown bars */}
-      <div className="space-y-1 mb-3">
-        <BreakdownBar label="Volatility" value={pulse.breakdown.volatility} />
-        <BreakdownBar label="Breadth" value={pulse.breakdown.breadth} />
-        <BreakdownBar label="Volume" value={pulse.breakdown.volume} />
-      </div>
-
-      {/* Movers */}
-      <div className="grid grid-cols-2 gap-3 text-[11px] pt-2.5 border-t border-border-subtle">
-        <Mover token={pulse.topMover} positive />
-        <Mover token={pulse.biggestDump} positive={false} />
-      </div>
-
-      {pulse.totalVolume > 0 && (
-        <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted">
-          <span className="uppercase tracking-[0.16em]">24h vol</span>
-          <span className="font-mono text-text-secondary">
+      {/* SOL macro + 24h volume */}
+      <div className="rounded-xl border border-border-subtle px-3 py-2.5 mb-3 bg-text-muted/[0.03]">
+        {pulse.sol ? (
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[12px]" aria-hidden>◎</span>
+              <span className="text-[10px] uppercase tracking-[0.16em] text-text-muted font-bold">
+                SOL
+              </span>
+              <span className="text-[13px] font-bold text-text-primary text-mono tabular-nums">
+                {humanizePrice(pulse.sol.price_usd)}
+              </span>
+            </div>
+            {pulse.sol.price_change_24h != null && (
+              <span
+                className="text-[12px] font-mono font-bold"
+                style={{
+                  color:
+                    pulse.sol.price_change_24h >= 0 ? "#0a8f57" : "#c1374a",
+                }}
+              >
+                {pulse.sol.price_change_24h >= 0 ? "↑ " : "↓ "}
+                {pctChange(pulse.sol.price_change_24h)}
+              </span>
+            )}
+          </div>
+        ) : null}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-[0.16em] text-text-muted font-bold">
+            24h vol
+          </span>
+          <span className="text-[12px] font-mono font-bold text-text-secondary tabular-nums">
             ${humanizeNumber(pulse.totalVolume, 1)}
           </span>
         </div>
-      )}
-    </div>
-  );
-}
-
-function BreakdownBar({ label, value }: { label: string; value: number }) {
-  const pct = Math.round(value * 100);
-  const color = pct > 70 ? "#FF2D9C" : pct > 40 ? "#5E5CFF" : "#94A0B0";
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-[9px] uppercase tracking-[0.12em] text-text-muted w-[70px] shrink-0 font-bold">
-        {label}
-      </span>
-      <div className="flex-1 h-1.5 rounded-full bg-text-muted/12 overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-700 ease-out"
-          style={{
-            width: `${pct}%`,
-            background: color,
-            boxShadow: pct > 60 ? `0 0 8px ${color}88` : undefined,
-          }}
-        />
       </div>
-      <span className="text-[10px] text-mono text-text-muted w-7 text-right tabular-nums">
-        {pct}%
-      </span>
+
+      {/* Movers */}
+      <div className="grid grid-cols-2 gap-3 text-[11px]">
+        <Mover token={pulse.topMover} positive />
+        <Mover token={pulse.biggestDump} positive={false} />
+      </div>
     </div>
   );
 }
@@ -226,7 +224,6 @@ function Skeleton() {
       <div className="h-14 w-full rounded bg-text-muted/10 animate-shimmer mb-4" />
       <div className="h-10 w-32 rounded bg-text-muted/15 animate-shimmer mb-3" />
       <div className="space-y-1.5">
-        <div className="h-2 w-full rounded bg-text-muted/10 animate-shimmer" />
         <div className="h-2 w-full rounded bg-text-muted/10 animate-shimmer" />
         <div className="h-2 w-full rounded bg-text-muted/10 animate-shimmer" />
       </div>
