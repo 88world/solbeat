@@ -95,7 +95,36 @@ export function PulseSphere({
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
 
+    // ───── Pulse shockwaves ─────
+    // 3 thin torus rings expanding from the center sphere outward at the
+    // BPM rate. Each ring has its own phase, evenly staggered, so the
+    // visualization feels like a continuous heartbeat ripple. Opacity fades
+    // as the ring expands, scale grows from 1.0 → ~4.5.
+    const SHOCKWAVE_COUNT = 3;
+    const shockwaveGeo = new THREE.TorusGeometry(1, 0.012, 8, 96);
+    const shockwaves: { mesh: THREE.Mesh; phase: number }[] = [];
+    for (let i = 0; i < SHOCKWAVE_COUNT; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xff2d9c,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const ring = new THREE.Mesh(shockwaveGeo, mat);
+      ring.rotation.x = Math.PI / 2;
+      scene.add(ring);
+      shockwaves.push({ mesh: ring, phase: i / SHOCKWAVE_COUNT });
+    }
+
     // ───── Satellite system ─────
+    type Trail = {
+      points: THREE.Points;
+      positions: Float32Array;
+      geometry: THREE.BufferGeometry;
+      material: THREE.ShaderMaterial;
+    };
     type Satellite = THREE.Sprite & {
       userData: {
         ca: string;
@@ -106,10 +135,54 @@ export function PulseSphere({
         phase: number;
         baseScale: number;
         ringColor: string;
+        trail?: Trail;
       };
     };
+    const TRAIL_LEN = 24;
     let satellites: Satellite[] = [];
     let hoveredSat: Satellite | null = null;
+
+    function createTrail(ringColor: string): Trail {
+      const positions = new Float32Array(TRAIL_LEN * 3);
+      const indices = new Float32Array(TRAIL_LEN);
+      for (let i = 0; i < TRAIL_LEN; i++) indices[i] = i / (TRAIL_LEN - 1);
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute("aIndex", new THREE.BufferAttribute(indices, 1));
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          uColor: { value: new THREE.Color(ringColor) },
+          uPixelRatio: { value: dpr },
+        },
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        vertexShader: `
+          attribute float aIndex;
+          uniform float uPixelRatio;
+          varying float vAlpha;
+          void main(){
+            vAlpha = aIndex;
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            gl_Position = projectionMatrix * mv;
+            gl_PointSize = (aIndex * aIndex * 7.0 + 0.6) * uPixelRatio * (240.0 / -mv.z);
+          }
+        `,
+        fragmentShader: `
+          precision highp float;
+          uniform vec3 uColor;
+          varying float vAlpha;
+          void main(){
+            vec2 uv = gl_PointCoord - 0.5;
+            float d = length(uv);
+            float a = smoothstep(0.5, 0.0, d) * vAlpha * vAlpha;
+            gl_FragColor = vec4(uColor, a * 0.85);
+          }
+        `,
+      });
+      const points = new THREE.Points(geometry, material);
+      return { points, positions, geometry, material };
+    }
 
     const ringSatellite = (token: TrendingToken, idx: number, total: number) => {
       // Per-token heat: volatility (|24h%| / 18) blended with volume rank.
@@ -152,6 +225,12 @@ export function PulseSphere({
         const mat = s.material as THREE.SpriteMaterial;
         mat.map?.dispose();
         mat.dispose();
+        const trail = s.userData.trail;
+        if (trail) {
+          scene.remove(trail.points);
+          trail.geometry.dispose();
+          trail.material.dispose();
+        }
       }
       satellites = [];
     }
@@ -171,6 +250,7 @@ export function PulseSphere({
           });
           const sprite = new THREE.Sprite(mat) as Satellite;
           sprite.scale.set(cfg.baseScale, cfg.baseScale, 1);
+          const trail = createTrail(cfg.ringColor);
           sprite.userData = {
             ca: cfg.ca,
             symbol: cfg.symbol,
@@ -180,8 +260,10 @@ export function PulseSphere({
             phase: cfg.phase,
             baseScale: cfg.baseScale,
             ringColor: cfg.ringColor,
+            trail,
           };
           scene.add(sprite);
+          scene.add(trail.points);
           satellites.push(sprite);
         });
       });
@@ -265,7 +347,26 @@ export function PulseSphere({
       mesh.rotation.x += dt * 0.012;
       mesh.position.y = Math.sin(now / 2400) * 0.045;
 
-      // Animate satellites
+      // Advance pulse shockwaves at the live BPM rate.
+      // BPM = 50 + heat * 50 (matches lib/utils/heat.ts heatToBpm)
+      const bpm = 50 + currentHeat * 50;
+      const shockPeriod = 60 / Math.max(20, bpm);
+      const phaseInc = dt / (shockPeriod * SHOCKWAVE_COUNT);
+      for (const sw of shockwaves) {
+        sw.phase = (sw.phase + phaseInc) % 1;
+        const scale = 1.0 + sw.phase * 3.6;
+        sw.mesh.scale.setScalar(scale);
+        const mat = sw.mesh.material as THREE.MeshBasicMaterial;
+        mat.opacity = Math.max(0, (1 - sw.phase) * (1 - sw.phase) * 0.45);
+        // Color tilts pink when hot, blue when cool — matches sphere palette.
+        mat.color.setRGB(
+          1.0 - 0.65 * (1 - currentHeat),
+          0.18 + 0.18 * (1 - currentHeat),
+          0.61 + 0.40 * (1 - currentHeat),
+        );
+      }
+
+      // Animate satellites + write trail positions
       let nextHovered: Satellite | null = null;
       for (const sat of satellites) {
         const u = sat.userData;
@@ -275,6 +376,24 @@ export function PulseSphere({
         tmpVec.y = Math.sin(uniforms.uTime.value * 0.6 + u.phase) * 0.18;
         tmpVec.applyQuaternion(u.orbitTilt);
         sat.position.copy(tmpVec);
+
+        // Comet trail — shift left, write current at the end
+        const trail = u.trail;
+        if (trail) {
+          const p = trail.positions;
+          for (let i = 0; i < TRAIL_LEN - 1; i++) {
+            const di = i * 3;
+            const si = (i + 1) * 3;
+            p[di] = p[si];
+            p[di + 1] = p[si + 1];
+            p[di + 2] = p[si + 2];
+          }
+          const last = (TRAIL_LEN - 1) * 3;
+          p[last] = tmpVec.x;
+          p[last + 1] = tmpVec.y;
+          p[last + 2] = tmpVec.z;
+          trail.geometry.attributes.position.needsUpdate = true;
+        }
       }
 
       // Hover detection
@@ -311,6 +430,11 @@ export function PulseSphere({
       mount.removeEventListener("click", onClick);
       document.removeEventListener("visibilitychange", onVis);
       disposeSatellites();
+      for (const sw of shockwaves) {
+        scene.remove(sw.mesh);
+        (sw.mesh.material as THREE.MeshBasicMaterial).dispose();
+      }
+      shockwaveGeo.dispose();
       renderer.dispose();
       geometry.dispose();
       material.dispose();

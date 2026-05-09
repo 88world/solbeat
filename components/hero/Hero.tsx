@@ -20,7 +20,7 @@ export function Hero() {
   const [transientHeat, setTransientHeat] = useState<number | null>(null);
   const heat = transientHeat ?? snapshot?.heat ?? 0.2;
 
-  const [sphereSize, setSphereSize] = useState(560);
+  const [sphereSize, setSphereSize] = useState(440);
   const heroRef = useRef<HTMLElement>(null);
   const router = useRouter();
 
@@ -28,17 +28,14 @@ export function Hero() {
     const compute = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      // Bumped substantially — canvas now has to fit the central sphere PLUS
-      // orbiting token satellites (orbit radius up to 3.5 in world space).
-      // Sphere itself appears smaller within the canvas; the surrounding area
-      // is for the satellite system.
       let target: number;
-      if (w < 480) target = 360;
-      else if (w < 768) target = 440;
-      else if (w < 1100) target = 480;
-      else if (w < 1440) target = 540;
-      else target = 600;
-      target = Math.min(target, Math.floor(h * 0.72));
+      if (w < 480) target = 320;
+      else if (w < 768) target = 380;
+      else if (w < 1100) target = 420;
+      else if (w < 1440) target = 460;
+      else target = 500;
+      // Hard-cap to ~62% of viewport height so the hero fits one screen.
+      target = Math.min(target, Math.floor(h * 0.62));
       setSphereSize(target);
     };
     compute();
