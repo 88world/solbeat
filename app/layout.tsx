@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SolBeat — The pulse of every Solana token, in plain English",
+  title: "SolBeat — The pulse of Solana",
   description:
-    "Paste any Solana contract. Get real-time on-chain data, X sentiment, and recent catalysts synthesized into a plain-English read by AI. Built by Block Valley Labs for the Solana Frontier Hackathon.",
+    "Paste any Solana contract. Get real-time on-chain data, X sentiment, and recent catalysts in one read. Built by Block Valley Labs for the Solana Frontier Hackathon.",
   applicationName: "SolBeat",
   authors: [{ name: "Block Valley Labs" }],
   keywords: [
@@ -28,7 +28,6 @@ export const metadata: Metadata = {
     "token analysis",
     "Jupiter swap",
     "Solana memecoins",
-    "AI",
   ],
   openGraph: {
     title: "SolBeat — The pulse of every Solana token",

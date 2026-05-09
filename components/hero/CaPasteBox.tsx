@@ -131,7 +131,7 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
   return (
     <form
       onSubmit={submit}
-      className="relative w-full max-w-3xl mx-auto"
+      className="relative w-full max-w-lg mx-auto"
       autoComplete="off"
       role="search"
     >
@@ -162,19 +162,19 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
         />
 
         <div
-          className={`relative flex items-center w-full p-2 rounded-[1.5rem] transition-all duration-500 ${
+          className={`relative flex items-center w-full p-1.5 rounded-2xl transition-all duration-500 ${
             error
-              ? "shadow-[0_8px_32px_rgba(255,71,87,0.18)]"
+              ? "shadow-[0_8px_24px_rgba(255,71,87,0.18)]"
               : justPasted
-                ? "shadow-[0_18px_50px_rgba(20,241,149,0.25)]"
+                ? "shadow-[0_14px_36px_rgba(20,241,149,0.22)]"
                 : focused
-                  ? "shadow-[0_18px_50px_rgba(255,45,156,0.18)]"
-                  : "shadow-[0_14px_40px_rgba(10,10,30,0.06),0_0_0_1px_rgba(10,10,30,0.05)]"
+                  ? "shadow-[0_14px_36px_rgba(255,45,156,0.16)]"
+                  : "shadow-[0_10px_28px_rgba(10,10,30,0.06),0_0_0_1px_rgba(10,10,30,0.05)]"
           }`}
           style={{
             background: "rgba(255, 255, 255, 0.92)",
-            backdropFilter: "blur(24px) saturate(170%)",
-            WebkitBackdropFilter: "blur(24px) saturate(170%)",
+            backdropFilter: "blur(20px) saturate(170%)",
+            WebkitBackdropFilter: "blur(20px) saturate(170%)",
             border: error
               ? "1px solid rgba(255, 71, 87, 0.4)"
               : focused
@@ -182,7 +182,7 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
                 : "1px solid rgba(10, 10, 30, 0.05)",
           }}
         >
-          <div className="pl-5 pr-3 text-text-muted">
+          <div className="pl-3.5 pr-2.5 text-text-muted">
             <SearchIcon focused={focused} />
           </div>
 
@@ -213,7 +213,7 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
                   }, 30);
                 }
               }}
-              className="w-full bg-transparent text-text-primary text-[15px] sm:text-[16px] text-mono outline-none py-3.5 sm:py-4 min-w-0"
+              className="w-full bg-transparent text-text-primary text-[14px] text-mono outline-none py-2.5 min-w-0"
               aria-label="Solana token address"
             />
             {/* Cycling placeholder — fades between phrases */}
@@ -221,7 +221,7 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
               <div
                 key={phIdx}
                 aria-hidden
-                className="absolute inset-y-0 left-0 flex items-center pointer-events-none animate-fade-in text-text-muted/85 text-[15px] sm:text-[16px] text-mono"
+                className="absolute inset-y-0 left-0 flex items-center pointer-events-none animate-fade-in text-text-muted/85 text-[14px] text-mono"
               >
                 {PLACEHOLDERS[phIdx]}
               </div>
@@ -241,9 +241,9 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
 
           {/* ⌘V hint when empty */}
           {!focused && value.length === 0 && (
-            <div className="hidden md:flex items-center gap-1 mr-3 pointer-events-none">
+            <div className="hidden md:flex items-center gap-1 mr-2 pointer-events-none">
               <kbd
-                className="text-[10px] text-text-muted text-mono px-1.5 py-0.5 rounded"
+                className="text-[9.5px] text-text-muted text-mono px-1.5 py-0.5 rounded"
                 style={{
                   background: "rgba(10, 10, 30, 0.04)",
                   border: "1px solid rgba(10, 10, 30, 0.06)",
@@ -262,9 +262,9 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
             onMouseMove={onButtonMove}
             onMouseLeave={onButtonLeave}
             onMouseDown={spawnRipple}
-            className={`relative overflow-hidden px-5 sm:px-6 h-[48px] sm:h-[52px] rounded-xl font-bold text-[13px] tracking-tight transition-all ${
+            className={`relative overflow-hidden px-4 sm:px-5 h-[40px] sm:h-[44px] rounded-lg font-bold text-[12.5px] tracking-tight transition-all ${
               canSubmit
-                ? "text-white hover:scale-[1.04] active:scale-[0.97] shadow-[0_6px_20px_rgba(10,10,30,0.22)]"
+                ? "text-white hover:scale-[1.04] active:scale-[0.97] shadow-[0_5px_16px_rgba(10,10,30,0.20)]"
                 : "bg-text-muted/12 text-text-muted cursor-not-allowed"
             } disabled:opacity-60`}
             style={{
