@@ -10,6 +10,7 @@ import { RiskScoreCard } from "@/components/token/RiskScoreCard";
 import { CatalystFeed } from "@/components/token/CatalystFeed";
 import { RecentTweets } from "@/components/token/RecentTweets";
 import { HolderList } from "@/components/token/HolderList";
+import { BubbleMap } from "@/components/token/BubbleMap";
 import { SwapPanel } from "@/components/token/SwapPanel";
 import { shortAddress } from "@/lib/utils";
 
@@ -143,6 +144,7 @@ export default async function TokenPage({ params }: PageProps) {
         <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-5 lg:gap-7">
           <div className="space-y-5">
             <PriceCard analysis={analysis} />
+            <BubbleMap ca={analysis.metadata.ca} />
             <HolderList holders={analysis.holders} ca={analysis.metadata.ca} />
           </div>
 

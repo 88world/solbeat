@@ -12,8 +12,14 @@ type DexPair = {
   quoteToken: { address: string; name: string; symbol: string };
   priceNative: string;
   priceUsd: string;
-  volume?: { h24?: number; h6?: number; h1?: number };
-  priceChange?: { h24?: number; h6?: number; h1?: number };
+  volume?: { m5?: number; h1?: number; h6?: number; h24?: number };
+  priceChange?: { m5?: number; h1?: number; h6?: number; h24?: number };
+  txns?: {
+    m5?: { buys?: number; sells?: number };
+    h1?: { buys?: number; sells?: number };
+    h6?: { buys?: number; sells?: number };
+    h24?: { buys?: number; sells?: number };
+  };
   liquidity?: { usd?: number };
   fdv?: number;
   marketCap?: number;
@@ -126,17 +132,77 @@ export async function fetchTrending(): Promise<TrendingToken[]> {
     ranked.sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
   }
 
-  return ranked.slice(0, LIMITS.TRENDING_RING_COUNT).map<TrendingToken>((p) => ({
+  return ranked.slice(0, LIMITS.TRENDING_RING_COUNT).map<TrendingToken>((p) => mapPairToToken(p));
+}
+
+/** Wider trending fetch for the leaderboard page — same logic, more results. */
+export async function fetchTrendingFull(limit = 50): Promise<TrendingToken[]> {
+  const collected: DexPair[] = [];
+  const queries = ["raydium", "meteora", "pump", "orca"];
+  const responses = await Promise.all(
+    queries.map((q) =>
+      fetch(`${BASE}/latest/dex/search?q=${encodeURIComponent(q)}`, {
+        next: { revalidate: 60 },
+      })
+        .then((r) => (r.ok ? (r.json() as Promise<DexSearchResponse>) : null))
+        .catch(() => null),
+    ),
+  );
+  for (const json of responses) {
+    if (json?.pairs) collected.push(...json.pairs);
+  }
+
+  const filtered = collected.filter((p) => {
+    if (p.chainId !== "solana") return false;
+    if (SKIP_BASE_MINTS.has(p.baseToken.address)) return false;
+    const baseSym = (p.baseToken.symbol ?? "").toUpperCase();
+    if (SKIP_BASE_SYMBOLS.has(baseSym)) return false;
+    const quoteSym = (p.quoteToken.symbol ?? "").toUpperCase();
+    if (!ACCEPTED_QUOTES.has(quoteSym)) return false;
+    const vol = p.volume?.h24 ?? 0;
+    if (vol < MIN_VOLUME_24H) return false;
+    return true;
+  });
+
+  const byToken = new Map<string, DexPair>();
+  for (const p of filtered) {
+    const existing = byToken.get(p.baseToken.address);
+    if (!existing || (p.volume?.h24 ?? 0) > (existing.volume?.h24 ?? 0)) {
+      byToken.set(p.baseToken.address, p);
+    }
+  }
+
+  return Array.from(byToken.values())
+    .sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0))
+    .slice(0, limit)
+    .map((p) => mapPairToToken(p));
+}
+
+function mapPairToToken(p: DexPair): TrendingToken {
+  const ageMs = p.pairCreatedAt ? Date.now() - p.pairCreatedAt : null;
+  return {
     ca: p.baseToken.address,
     symbol: p.baseToken.symbol,
     name: p.baseToken.name,
-    price_usd: parsePriceUsd(p.priceUsd),
-    price_change_1h: p.priceChange?.h1 ?? null,
-    price_change_24h: p.priceChange?.h24 ?? null,
-    volume_24h: p.volume?.h24 ?? null,
-    liquidity_usd: p.liquidity?.usd ?? null,
     image: p.info?.imageUrl ?? null,
-  }));
+    price_usd: parsePriceUsd(p.priceUsd),
+    market_cap: p.marketCap ?? null,
+    fdv: p.fdv ?? null,
+    liquidity_usd: p.liquidity?.usd ?? null,
+    price_change_5m: p.priceChange?.m5 ?? null,
+    price_change_1h: p.priceChange?.h1 ?? null,
+    price_change_6h: p.priceChange?.h6 ?? null,
+    price_change_24h: p.priceChange?.h24 ?? null,
+    volume_5m: p.volume?.m5 ?? null,
+    volume_1h: p.volume?.h1 ?? null,
+    volume_6h: p.volume?.h6 ?? null,
+    volume_24h: p.volume?.h24 ?? null,
+    txns_24h_buys: p.txns?.h24?.buys ?? null,
+    txns_24h_sells: p.txns?.h24?.sells ?? null,
+    pair_address: p.pairAddress ?? null,
+    pair_age_hours: ageMs != null ? ageMs / 3_600_000 : null,
+    dex: p.dexId ?? null,
+  };
 }
 
 /** SOL macro — price + 24h change + 24h volume from the deepest SOL/USDC pair. */

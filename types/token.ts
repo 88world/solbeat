@@ -87,12 +87,34 @@ export type TrendingToken = {
   ca: string;
   symbol: string;
   name: string | null;
-  price_usd: number | null;
-  price_change_1h: number | null;
-  price_change_24h: number | null;
-  volume_24h: number | null;
-  liquidity_usd: number | null;
   image: string | null;
+
+  // Market
+  price_usd: number | null;
+  market_cap: number | null;
+  fdv: number | null;
+  liquidity_usd: number | null;
+
+  // Price change across timeframes
+  price_change_5m: number | null;
+  price_change_1h: number | null;
+  price_change_6h: number | null;
+  price_change_24h: number | null;
+
+  // Volume across timeframes
+  volume_5m: number | null;
+  volume_1h: number | null;
+  volume_6h: number | null;
+  volume_24h: number | null;
+
+  // Transaction counts (24h)
+  txns_24h_buys: number | null;
+  txns_24h_sells: number | null;
+
+  // Pair / pool
+  pair_address: string | null;
+  pair_age_hours: number | null;
+  dex: string | null;
 };
 
 export type WalletReclaimAccount = {

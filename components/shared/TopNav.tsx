@@ -10,6 +10,9 @@ export function TopNav() {
           <Logo />
         </Link>
         <nav className="hidden sm:flex items-center gap-6 text-[13px] text-text-secondary">
+          <Link href="/trending" className="hover:text-text-primary transition">
+            Trending
+          </Link>
           <Link href="/wallet" className="hover:text-text-primary transition">
             Wallet pulse
           </Link>
