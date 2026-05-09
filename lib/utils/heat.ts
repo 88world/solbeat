@@ -150,25 +150,25 @@ const EMPTY_SNAPSHOT: HeatSnapshot = {
 };
 
 /**
- * BPM range 40..120. Wider than before so the gap between a calm market and
- * an on-fire one is dramatic on the badge.
- *   heat 0.1  → 48 BPM (Calm)
- *   heat 0.3  → 64 BPM (Steady)
- *   heat 0.5  → 80 BPM (Active)
- *   heat 0.7  → 96 BPM (Hot)
- *   heat 0.9  → 112 BPM (On fire)
+ * Real heartbeat range: 40..200 BPM. Maps to actual cardio zones a user knows
+ * intuitively — resting / walking / jogging / running / sprinting.
+ *   heat 0.1 → 56 BPM   (Calm,    resting)
+ *   heat 0.3 → 88 BPM   (Steady,  walking briskly)
+ *   heat 0.5 → 120 BPM  (Active,  jogging)
+ *   heat 0.7 → 152 BPM  (Hot,     running)
+ *   heat 0.9 → 184 BPM  (On fire, sprinting)
  */
 export function heatToBpm(heat: number): number {
-  return 40 + heat * 80;
+  return 40 + heat * 160;
 }
 
 export function heatLabel(
   bpm: number,
 ): "Calm" | "Steady" | "Active" | "Hot" | "On fire" {
-  if (bpm >= 110) return "On fire";
-  if (bpm >= 85) return "Hot";
-  if (bpm >= 72) return "Active";
-  if (bpm >= 60) return "Steady";
+  if (bpm >= 160) return "On fire";
+  if (bpm >= 120) return "Hot";
+  if (bpm >= 90) return "Active";
+  if (bpm >= 65) return "Steady";
   return "Calm";
 }
 

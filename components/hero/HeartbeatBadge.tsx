@@ -32,11 +32,11 @@ export function HeartbeatBadge({ bpm }: { bpm: number }) {
 
   const periodMs = (60 / Math.max(20, displayBpm)) * 1000;
   const label = heatLabel(displayBpm);
-  const heat = (displayBpm - 50) / 35; // 0..1 mapped from 50..85
+  const heat = Math.max(0, Math.min(1, (displayBpm - 40) / 160)); // 0..1 from 40..200
   const labelColor =
-    heat >= 0.85 ? "#c1374a" :   // On fire / Hot — red
-    heat >= 0.6  ? "#d6601a" :   // Hot — amber-red
-    heat >= 0.35 ? "#a3680a" :   // Active — amber
+    heat >= 0.75 ? "#c1374a" :   // On fire — red
+    heat >= 0.5  ? "#d6601a" :   // Hot — amber-red
+    heat >= 0.3  ? "#a3680a" :   // Active — amber
     "#0a8f57";                    // Calm / Steady — green
 
   return (
