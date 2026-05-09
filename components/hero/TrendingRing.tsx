@@ -105,6 +105,7 @@ export function TrendingRing({ radius = 380 }: Props) {
                 }}
               >
                 <div
+                  data-ticker-in
                   style={{
                     animation: "orbit-reverse 80s linear infinite",
                     animationPlayState: paused ? "paused" : "running",
