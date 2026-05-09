@@ -6,6 +6,7 @@ import { PulseSphere } from "./PulseSphere";
 import { TrendingList } from "./TrendingList";
 import { CaPasteBox } from "./CaPasteBox";
 import { AmbientOrbs } from "./AmbientOrbs";
+import { HeartbeatBadge } from "./HeartbeatBadge";
 
 export function Hero() {
   const [bpm, setBpm] = useState(50);
@@ -60,6 +61,8 @@ export function Hero() {
       style={{ minHeight: "calc(100svh - 64px)" }}
     >
       <AmbientOrbs />
+      {/* Premium dot-grid backdrop unifies the two columns visually */}
+      <div className="absolute inset-0 dot-grid pointer-events-none" aria-hidden />
 
       <div className="relative z-10 mx-auto max-w-[1280px] w-full px-6 lg:px-10 pt-10 lg:pt-16 pb-40">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-12 lg:gap-8 items-center">
@@ -102,6 +105,13 @@ export function Hero() {
               onMouseLeave={() => setBpm(50)}
             >
               <PulseSphere size={sphereSize} bpm={bpm} />
+            </div>
+            {/* Floating BPM badge — beats with the actual sphere rhythm */}
+            <div
+              data-fade-up
+              className="absolute bottom-4 sm:bottom-6 right-4 sm:right-6 lg:right-2"
+            >
+              <HeartbeatBadge bpm={bpm} />
             </div>
           </div>
         </div>

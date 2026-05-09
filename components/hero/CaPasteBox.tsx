@@ -64,21 +64,38 @@ export function CaPasteBox({
       autoComplete="off"
       role="search"
     >
+      {/* Outer wrapper holds the animated gradient ring on focus */}
+      <div className="relative">
+        <div
+          aria-hidden
+          className={`pointer-events-none absolute -inset-px rounded-3xl transition-opacity duration-500 ${
+            focused && !error ? "opacity-100" : "opacity-0"
+          }`}
+          style={{
+            background:
+              "linear-gradient(110deg, #FF2D9C, #5E5CFF 45%, #14F195 80%, #FF2D9C 110%)",
+            backgroundSize: "220% 100%",
+            animation: focused ? "text-shimmer 4s linear infinite" : "none",
+            filter: "blur(0.5px)",
+          }}
+        />
       <div
         className={`relative flex items-center w-full p-2 rounded-3xl transition-all duration-500 ${
           error
-            ? "border-signal-negative/40 shadow-[0_8px_32px_rgba(255,71,87,0.18)]"
+            ? "shadow-[0_8px_32px_rgba(255,71,87,0.18)]"
             : focused
-              ? "shadow-[0_10px_40px_rgba(255,45,156,0.18),0_0_0_1px_rgba(255,45,156,0.30)]"
+              ? "shadow-[0_18px_50px_rgba(255,45,156,0.18)]"
               : "shadow-[0_10px_40px_rgba(10,10,30,0.06),0_0_0_1px_rgba(10,10,30,0.05)]"
         }`}
         style={{
-          background: "rgba(255, 255, 255, 0.78)",
+          background: "rgba(255, 255, 255, 0.86)",
           backdropFilter: "blur(20px) saturate(160%)",
           WebkitBackdropFilter: "blur(20px) saturate(160%)",
           border: error
             ? "1px solid rgba(255, 71, 87, 0.4)"
-            : "1px solid rgba(10, 10, 30, 0.05)",
+            : focused
+              ? "1px solid transparent"
+              : "1px solid rgba(10, 10, 30, 0.05)",
         }}
       >
         <div className="pl-4 pr-2 text-text-muted">
@@ -145,6 +162,7 @@ export function CaPasteBox({
             </span>
           )}
         </button>
+      </div>
       </div>
       {error && (
         <p className="mt-3 text-center text-[12px] text-signal-negative">

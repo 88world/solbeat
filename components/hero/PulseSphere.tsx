@@ -27,7 +27,9 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const dpr = Math.min(window.devicePixelRatio, 2);
+    // DPR cap at 1.5: keeps ~720px output on a 480px sphere on retina,
+    // sharp enough to read but ~55% the GPU work of DPR 2.
+    const dpr = Math.min(window.devicePixelRatio, 1.5);
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
@@ -36,7 +38,7 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
     });
     renderer.setPixelRatio(dpr);
     renderer.setSize(size, size, false);
-    renderer.setClearColor(0xffffff, 0);
+    renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
 
@@ -44,8 +46,10 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
     camera.position.set(0, 0, 3.4);
 
-    // High-poly icosphere for silky vertex displacement.
-    const geometry = new THREE.IcosahedronGeometry(1, 128);
+    // 48-subdivision icosphere = ~46k triangles. With displacement amplitude
+    // <0.13 the surface stays smooth and we run a comfortable 60fps even on
+    // mid-tier GPUs. Going higher cost a lot for marginal visual gain.
+    const geometry = new THREE.IcosahedronGeometry(1, 48);
 
     const uniforms = {
       uTime: { value: 0 },
@@ -162,32 +166,43 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
           vec3 base = mix(uColorB, uColorA, smoothstep(-0.3, 1.0, vNoise + uPulse * 0.5));
 
           // Iridescent chromatic highlights driven by fresnel + time
+          // Bigger amplitude than before — pushes saturation harder at the rim.
           vec3 iri = vec3(
-            sin(fres * 9.0  + uTime * 1.1)        * 0.5 + 0.5,
-            sin(fres * 11.0 + uTime * 1.3 + 1.7)  * 0.5 + 0.5,
-            sin(fres * 13.0 + uTime * 1.5 + 3.4)  * 0.5 + 0.5
+            sin(fres * 8.0  + uTime * 1.1)        * 0.5 + 0.5,
+            sin(fres * 10.0 + uTime * 1.3 + 1.7)  * 0.5 + 0.5,
+            sin(fres * 12.0 + uTime * 1.5 + 3.4)  * 0.5 + 0.5
           );
-          vec3 col = mix(base, iri, fresPow * 0.45);
+          vec3 col = mix(base, iri, fresPow * 0.55);
 
-          // Specular wet-glass highlight from a key light
-          vec3 lightDir = normalize(vec3(0.6, 0.9, 0.8));
-          vec3 R = reflect(-lightDir, N);
-          float spec = pow(max(dot(V, R), 0.0), 56.0);
-          col += vec3(1.0) * spec * 1.4;
+          // Two-light setup for genuine dimensionality:
+          // key light (top-right, warm) + fill (bottom-left, cool brand pink)
+          vec3 keyDir = normalize(vec3(0.6, 0.9, 0.8));
+          vec3 fillDir = normalize(vec3(-0.5, -0.4, 0.6));
+          vec3 Rk = reflect(-keyDir, N);
+          vec3 Rf = reflect(-fillDir, N);
+          float specKey  = pow(max(dot(V, Rk), 0.0), 64.0);
+          float specFill = pow(max(dot(V, Rf), 0.0), 24.0);
+          col += vec3(1.0) * specKey * 1.35;
+          col += uColorA * specFill * 0.35;
 
-          // Heartbeat green sparkle — only on the pulse peak, only on displaced ridges
+          // Heartbeat green sparkle on the pulse peak, only on raised ridges
           float sparkle = smoothstep(0.55, 0.95, vDisp + 0.5) * uPulse;
-          col = mix(col, uColorC, sparkle * 0.35);
+          col = mix(col, uColorC, sparkle * 0.30);
 
           // Pulse-driven exposure lift
-          col *= (0.95 + uPulse * 0.45 + uHover * 0.10);
+          col *= (0.92 + uPulse * 0.42 + uHover * 0.10);
 
           // 8-bit dither to kill banding
           float d = (hash(gl_FragCoord.xy) - 0.5) / 255.0;
           col += d;
 
-          // Bubbly translucent edge — solid in middle, glassy at the rim
-          float alpha = 0.85 + fres * 0.15 + uHover * 0.05;
+          // Smoother rim falloff — solid in the body, soft glass at the edge.
+          // smoothstep gives a curved transition instead of the previous
+          // linear ramp, which kills the visible "border" on the sphere edge.
+          float bodyAlpha = 0.92;
+          float rimSoft = smoothstep(0.92, 1.0, fres);
+          float alpha = bodyAlpha - rimSoft * 0.55 + uHover * 0.08;
+          alpha = clamp(alpha, 0.35, 1.0);
           gl_FragColor = vec4(col, alpha);
         }
       `,
@@ -195,8 +210,8 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
 
-    // Outer halo — soft additive bloom-substitute
-    const haloGeo = new THREE.SphereGeometry(1.55, 64, 64);
+    // Outer halo — soft additive, gentler falloff so the orb melts into the bg
+    const haloGeo = new THREE.SphereGeometry(1.6, 48, 48);
     const haloMat = new THREE.ShaderMaterial({
       uniforms: { uPulse: uniforms.uPulse },
       transparent: true,
@@ -215,9 +230,9 @@ export function PulseSphere({ size = 480, bpm = 50 }: Props) {
         uniform float uPulse;
         varying vec3 vN;
         void main(){
-          float f = pow(1.0 - abs(vN.z), 3.0);
+          float f = pow(1.0 - abs(vN.z), 4.0);
           vec3 col = mix(vec3(0.37, 0.36, 1.0), vec3(1.0, 0.18, 0.61), 0.55);
-          gl_FragColor = vec4(col, f * (0.18 + uPulse * 0.28));
+          gl_FragColor = vec4(col, f * (0.14 + uPulse * 0.24));
         }
       `,
     });
