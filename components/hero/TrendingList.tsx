@@ -1,18 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { animate, stagger } from "animejs";
 import Link from "next/link";
 import type { TrendingToken } from "@/types/token";
 import { humanizeNumber, pctChange } from "@/lib/utils";
 
+const ROTATE_INTERVAL_MS = 4500;
+
 /**
- * Vertical trending list — replaces the orbital ring with something readable.
- * Each row: avatar (logo or gradient fallback) + symbol + name + % change.
- * Slide-up entrance with anime.js stagger once data lands.
+ * Vertical trending list — auto-rotates through the trending pool every 4.5s.
+ * Newest item slides in at the top with full opacity, older items fade as
+ * they shift down (degen-feel: "what just popped"). Uses framer-motion's
+ * AnimatePresence for clean enter/exit and an opacity ramp keyed by row index.
  *
  * Optional `heat` prop (0..1) — when the market gets hot, the live indicator
- * dot shifts from brand pink to Solana green to reinforce the sphere's signal.
+ * dot shifts from BV pink to Solana green and the label updates.
  */
 export function TrendingList({
   limit = 5,
@@ -22,9 +26,11 @@ export function TrendingList({
   heat?: number;
 }) {
   const [tokens, setTokens] = useState<TrendingToken[]>([]);
+  const [offset, setOffset] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const animatedRef = useRef(false);
 
+  // Fetch trending pool
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -32,19 +38,29 @@ export function TrendingList({
         const r = await fetch("/api/trending", { cache: "no-store" });
         if (!r.ok) return;
         const json = (await r.json()) as { tokens: TrendingToken[] };
-        if (!cancelled) setTokens(json.tokens.slice(0, limit));
+        if (!cancelled) setTokens(json.tokens);
       } catch {
         /* swallow */
       }
     };
     load();
-    const id = setInterval(load, 60_000);
+    const id = setInterval(load, 30_000);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [limit]);
+  }, []);
 
+  // Auto-rotate the visible window — only when we have more than `limit` tokens
+  useEffect(() => {
+    if (tokens.length <= limit) return;
+    const id = setInterval(() => {
+      setOffset((o) => (o + 1) % tokens.length);
+    }, ROTATE_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [tokens.length, limit]);
+
+  // Initial entrance (anime.js stagger) — fires once per page load
   useEffect(() => {
     if (animatedRef.current || tokens.length === 0) return;
     const root = rootRef.current;
@@ -60,6 +76,12 @@ export function TrendingList({
       ease: "out(3)",
     });
   }, [tokens]);
+
+  const visible = useMemo(() => {
+    if (tokens.length === 0) return [];
+    if (tokens.length <= limit) return tokens;
+    return Array.from({ length: limit }, (_, i) => tokens[(offset + i) % tokens.length]);
+  }, [tokens, offset, limit]);
 
   const isHot = heat >= 0.6;
   const dotColor = isHot ? "#14F195" : "#FF2D9C";
@@ -82,28 +104,61 @@ export function TrendingList({
           {label}
         </span>
       </div>
-      <div className="flex flex-col gap-2">
-        {tokens.length === 0
-          ? Array.from({ length: limit }).map((_, i) => <SkeletonRow key={i} />)
-          : tokens.map((t) => <TrendingRow key={t.ca} token={t} />)}
+
+      <div className="relative flex flex-col gap-2">
+        {visible.length === 0 ? (
+          Array.from({ length: limit }).map((_, i) => <SkeletonRow key={i} />)
+        ) : (
+          <AnimatePresence initial={false} mode="popLayout">
+            {visible.map((t, i) => {
+              // Opacity ramps down as items move down the stack — top item is
+              // the freshest/loudest, bottom item is fading out.
+              const targetOpacity = 1 - i * 0.10;
+              return (
+                <motion.div
+                  key={t.ca}
+                  layout
+                  data-trend-row
+                  initial={{ opacity: 0, y: -14, filter: "blur(2px)" }}
+                  animate={{ opacity: targetOpacity, y: 0, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, y: 14, filter: "blur(2px)" }}
+                  transition={{
+                    layout: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+                    opacity: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
+                    y: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
+                    filter: { duration: 0.55 },
+                  }}
+                >
+                  <TrendingRow token={t} fresh={i === 0} />
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        )}
       </div>
     </div>
   );
 }
 
-function TrendingRow({ token }: { token: TrendingToken }) {
+function TrendingRow({
+  token,
+  fresh,
+}: {
+  token: TrendingToken;
+  fresh: boolean;
+}) {
   const symbol = (token.symbol ?? "").replace(/^\$/, "").toUpperCase();
   const change = token.price_change_24h ?? 0;
   const positive = change >= 0;
   return (
     <Link
       href={`/token/${token.ca}`}
-      data-trend-row
-      className="group relative flex items-center justify-between gap-3 px-3 py-2.5 rounded-2xl border border-border-subtle bg-bg-elevated/55 backdrop-blur-md hover:bg-bg-elevated/85 hover:border-border-emphasized hover:-translate-y-0.5 transition-all duration-300 overflow-hidden"
+      className="group relative flex items-center justify-between gap-3 px-3.5 py-3 rounded-2xl border border-border-subtle bg-bg-elevated/55 backdrop-blur-md hover:bg-bg-elevated/85 hover:border-border-emphasized hover:-translate-y-0.5 transition-all duration-300 overflow-hidden"
       style={{
         boxShadow: "0 1px 0 rgba(255,255,255,0.5) inset, 0 6px 20px rgba(10, 10, 30, 0.04)",
       }}
     >
+      {/* Hover glow */}
       <div
         aria-hidden
         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
@@ -112,12 +167,36 @@ function TrendingRow({ token }: { token: TrendingToken }) {
             "linear-gradient(110deg, rgba(255,45,156,0.06), rgba(94,92,255,0.06))",
         }}
       />
-      <div className="relative flex items-center gap-3 min-w-0">
+
+      {/* Direction stripe — colored bar at the left edge */}
+      <span
+        aria-hidden
+        className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-7 rounded-r-full"
+        style={{
+          background: positive ? "#14F195" : "#FF4757",
+          opacity: Math.min(0.85, 0.3 + Math.abs(change) / 25),
+        }}
+      />
+
+      <div className="relative flex items-center gap-3 min-w-0 pl-1">
         <Avatar image={token.image} symbol={symbol} />
         <div className="flex flex-col min-w-0">
-          <span className="text-[13px] font-semibold text-text-primary tracking-tight truncate">
-            {symbol}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[13px] font-semibold text-text-primary tracking-tight truncate">
+              {symbol}
+            </span>
+            {fresh && (
+              <span
+                className="text-[8.5px] font-bold uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-md"
+                style={{
+                  background: "rgba(255, 45, 156, 0.10)",
+                  color: "#a01660",
+                }}
+              >
+                fresh
+              </span>
+            )}
+          </div>
           <span className="text-[11px] font-medium text-text-muted truncate">
             {token.name ?? "—"}
             {token.volume_24h != null && (
@@ -128,24 +207,22 @@ function TrendingRow({ token }: { token: TrendingToken }) {
           </span>
         </div>
       </div>
+
       <div
-        className={`relative font-mono text-[12.5px] font-semibold shrink-0 ${
+        className={`relative flex items-center gap-1 font-mono text-[12.5px] font-semibold shrink-0 ${
           positive ? "text-signal-positive" : "text-signal-negative"
         }`}
       >
+        <span aria-hidden className="text-[10px]">
+          {positive ? "▲" : "▼"}
+        </span>
         {pctChange(change)}
       </div>
     </Link>
   );
 }
 
-function Avatar({
-  image,
-  symbol,
-}: {
-  image: string | null;
-  symbol: string;
-}) {
+function Avatar({ image, symbol }: { image: string | null; symbol: string }) {
   if (image) {
     return (
       <span className="relative size-9 rounded-xl overflow-hidden bg-white shrink-0 border border-border-subtle">
@@ -178,7 +255,7 @@ function Avatar({
 
 function SkeletonRow() {
   return (
-    <div className="flex items-center justify-between px-3 py-2.5 rounded-2xl border border-border-subtle">
+    <div className="flex items-center justify-between px-3.5 py-3 rounded-2xl border border-border-subtle">
       <div className="flex items-center gap-3">
         <div className="size-9 rounded-xl bg-text-muted/15 animate-shimmer" />
         <div className="space-y-1.5">

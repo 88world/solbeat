@@ -26,7 +26,6 @@ export const metadata: Metadata = {
     "SolBeat",
     "Block Valley",
     "token analysis",
-    "DEXScreener alternative",
     "Jupiter swap",
     "Solana memecoins",
     "AI",

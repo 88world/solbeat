@@ -217,9 +217,10 @@ export function PulseSphere({ size = 480, heat = 0.2 }: Props) {
 
       uniforms.uTime.value += dt;
 
-      // Smoothly interpolate heat — transitions never snap.
+      // Smoothly interpolate heat — slow lerp so transitions are ambient,
+      // never twitchy. dt * 0.55 ≈ 1.8s to fully reach a new target.
       const targetHeat = Math.max(0, Math.min(1, heatRef.current));
-      currentHeat += (targetHeat - currentHeat) * Math.min(1, dt * 1.8);
+      currentHeat += (targetHeat - currentHeat) * Math.min(1, dt * 0.55);
       uniforms.uHeat.value = reduced ? Math.min(0.4, currentHeat) : currentHeat;
 
       // Smoothly interpolate mouse

@@ -10,24 +10,36 @@ import { HeartbeatBadge } from "./HeartbeatBadge";
 import { computeHeat, heatToBpm } from "@/lib/utils/heat";
 import type { TrendingToken } from "@/types/token";
 
-const HOVER_HEAT_LIFT = 0.15;
+const HOVER_HEAT_LIFT = 0.12;
 const SUBMIT_VALID_HEAT = 0.95;
 const SUBMIT_INVALID_HEAT = 0.4;
-const TRANSIENT_MS = 2200;
+const TRANSIENT_MS = 2400;
 
 export function Hero() {
-  // Heat-canonical state model. The sphere is heat-driven (no literal
-  // heartbeat any more), the badge derives its BPM from the same heat.
-  // Submit transients can override BPM independently for the "On fire" label.
   const [marketHeat, setMarketHeat] = useState(0.2);
   const [transientHeat, setTransientHeat] = useState<number | null>(null);
   const [transientBpm, setTransientBpm] = useState<number | null>(null);
   const heat = transientHeat ?? marketHeat;
   const bpm = transientBpm ?? heatToBpm(Math.min(1, heat));
+
   const [sphereSize, setSphereSize] = useState(440);
   const heroRef = useRef<HTMLElement>(null);
 
-  // Poll trending → heat. /api/trending is server-cached for 60s.
+  useEffect(() => {
+    const compute = () => {
+      const w = window.innerWidth;
+      if (w < 480) setSphereSize(280);
+      else if (w < 768) setSphereSize(340);
+      else if (w < 1100) setSphereSize(380);
+      else if (w < 1440) setSphereSize(440);
+      else setSphereSize(500);
+    };
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, []);
+
+  // Poll trending → heat. Cached server-side for 60s, browser polls every 30s.
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
@@ -42,25 +54,11 @@ export function Hero() {
       }
     };
     refresh();
-    const id = setInterval(refresh, 45_000);
+    const id = setInterval(refresh, 30_000);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, []);
-
-  useEffect(() => {
-    const compute = () => {
-      const w = window.innerWidth;
-      if (w < 480) setSphereSize(280);
-      else if (w < 768) setSphereSize(360);
-      else if (w < 1100) setSphereSize(380);
-      else if (w < 1440) setSphereSize(440);
-      else setSphereSize(500);
-    };
-    compute();
-    window.addEventListener("resize", compute);
-    return () => window.removeEventListener("resize", compute);
   }, []);
 
   // Entrance choreography
@@ -97,27 +95,36 @@ export function Hero() {
       style={{ minHeight: "calc(100svh - 64px)" }}
     >
       <AmbientOrbs />
-      {/* Premium dot-grid backdrop unifies the two columns visually */}
       <div className="absolute inset-0 dot-grid pointer-events-none" aria-hidden />
 
-      <div className="relative z-10 mx-auto max-w-[1280px] w-full px-6 lg:px-10 pt-10 lg:pt-16 pb-40">
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-12 lg:gap-8 items-center">
-          {/* LEFT — copy + trending */}
-          <div className="flex flex-col items-start text-left order-2 lg:order-1">
-            {/* Tiny "what is this" badge above the headline */}
-            <div
-              data-fade-up
-              className="inline-flex items-center gap-2 px-2.5 py-1 mb-5 rounded-full text-[10.5px] font-bold uppercase tracking-[0.16em]"
-              style={{
-                background: "rgba(255, 45, 156, 0.08)",
-                color: "#a01660",
-                border: "1px solid rgba(255, 45, 156, 0.22)",
-              }}
-            >
-              <span className="size-1.5 rounded-full bg-accent-pulse animate-pulse" />
-              Block Valley · AI reasoning layer
-            </div>
+      <div className="relative z-10 mx-auto max-w-[1280px] w-full px-6 lg:px-10 pt-8 lg:pt-10 pb-12">
+        {/* TOP — paste box, the action sits above the fold */}
+        <div data-fade-up className="mb-10 lg:mb-14">
+          <CaPasteBox
+            heat={heat}
+            onPulse={(kind) => {
+              const targetHeat =
+                kind === "valid" ? SUBMIT_VALID_HEAT : SUBMIT_INVALID_HEAT;
+              const targetBpm = kind === "valid" ? 130 : 78;
+              setTransientHeat(targetHeat);
+              setTransientBpm(targetBpm);
+              setTimeout(() => {
+                setTransientHeat(null);
+                setTransientBpm(null);
+              }, TRANSIENT_MS);
+            }}
+          />
+          <p className="mt-3.5 text-center text-[11.5px] text-text-muted">
+            try{" "}
+            <TickerHint />
+            {" "}or paste any contract · ⌘V from anywhere
+          </p>
+        </div>
 
+        {/* TWO-COLUMN — copy + trending left, sphere right */}
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-12 lg:gap-8 items-center">
+          {/* LEFT */}
+          <div className="flex flex-col items-start text-left order-2 lg:order-1">
             <h1
               data-fade-up
               className="font-extrabold tracking-[-0.04em] leading-[1.02] text-text-primary text-[clamp(2.4rem,5.4vw,4.5rem)]"
@@ -138,12 +145,8 @@ export function Hero() {
               data-fade-up
               className="mt-5 text-text-secondary text-[15px] sm:text-[16px] leading-relaxed max-w-md font-medium"
             >
-              Paste any contract. Get an{" "}
-              <span className="text-text-primary font-semibold">
-                AI-decoded read
-              </span>{" "}
-              — on-chain truth, X sentiment, and live catalysts in one paragraph.
-              No more squinting at DEXScreener.
+              Token intel decoded by AI — on-chain, social, and live catalysts
+              in one read.
             </p>
 
             <div data-fade-up className="mt-10 hidden lg:block">
@@ -151,22 +154,20 @@ export function Hero() {
             </div>
           </div>
 
-          {/* RIGHT — sphere */}
+          {/* RIGHT */}
           <div className="relative flex items-center justify-center order-1 lg:order-2">
             <div
               data-sphere-in
-              onMouseEnter={() => {
-                // Subtle warmth lift on hover, capped at 1.
-                setTransientHeat(Math.min(1, marketHeat + HOVER_HEAT_LIFT));
-              }}
+              onMouseEnter={() =>
+                setTransientHeat(Math.min(1, marketHeat + HOVER_HEAT_LIFT))
+              }
               onMouseLeave={() => setTransientHeat(null)}
             >
               <PulseSphere size={sphereSize} heat={heat} />
             </div>
-            {/* Floating BPM badge — derives from the same heat */}
             <div
               data-fade-up
-              className="absolute bottom-4 sm:bottom-6 right-4 sm:right-6 lg:right-2"
+              className="absolute bottom-2 sm:bottom-4 right-2 sm:right-4 lg:right-2"
             >
               <HeartbeatBadge bpm={bpm} />
             </div>
@@ -177,32 +178,6 @@ export function Hero() {
         <div data-fade-up className="lg:hidden mt-10 flex justify-center">
           <TrendingList limit={4} heat={heat} />
         </div>
-      </div>
-
-      {/* Bottom-anchored search */}
-      <div
-        data-fade-up
-        className="absolute left-0 right-0 bottom-6 sm:bottom-10 px-6 z-20"
-      >
-        <CaPasteBox
-          onPulse={(kind) => {
-            // Submit spike — quick excitement (heat → near max, BPM → "On fire"),
-            // then auto-clear back to whatever the market is actually doing.
-            const targetHeat = kind === "valid" ? SUBMIT_VALID_HEAT : SUBMIT_INVALID_HEAT;
-            const targetBpm = kind === "valid" ? 130 : 78;
-            setTransientHeat(targetHeat);
-            setTransientBpm(targetBpm);
-            setTimeout(() => {
-              setTransientHeat(null);
-              setTransientBpm(null);
-            }, TRANSIENT_MS);
-          }}
-        />
-        <p className="mt-3.5 text-center text-[11px] sm:text-[12px] text-text-muted">
-          try{" "}
-          <TickerHint />
-          {" "}or paste any contract · ⌘V from anywhere
-        </p>
       </div>
     </section>
   );

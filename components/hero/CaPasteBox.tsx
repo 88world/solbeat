@@ -13,11 +13,20 @@ import { parseInput, isValidSolanaAddress } from "@/lib/solana/validation";
 
 type Ripple = { id: number; x: number; y: number };
 
-export function CaPasteBox({
-  onPulse,
-}: {
+type Props = {
   onPulse?: (kind: "valid" | "invalid") => void;
-}) {
+  /** Optional 0..1 — when hot, the paste box glow tilts pink. */
+  heat?: number;
+};
+
+const PLACEHOLDERS = [
+  "Paste a Solana contract address…",
+  "Paste a CA — try $BONK, $WIF, $JUP",
+  "Drop any mint. Read its pulse.",
+  "Paste an address. Decode the token.",
+] as const;
+
+export function CaPasteBox({ onPulse, heat = 0 }: Props) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -25,18 +34,18 @@ export function CaPasteBox({
   const [justPasted, setJustPasted] = useState(false);
   const [ripples, setRipples] = useState<Ripple[]>([]);
   const [magnet, setMagnet] = useState({ x: 0, y: 0 });
+  const [phIdx, setPhIdx] = useState(0);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Real-time validation — check whenever value changes
   const trimmed = value.trim();
   const valid = isValidSolanaAddress(trimmed);
   const tooShort = trimmed.length > 0 && trimmed.length < 32;
   const wrongShape =
     trimmed.length >= 32 && !valid && !/^\$?[A-Za-z]{2,10}$/.test(trimmed);
 
-  // ⌘V / Ctrl+V anywhere on the page focuses the paste box.
+  // ⌘V / Ctrl+V anywhere → focus
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
@@ -53,6 +62,15 @@ export function CaPasteBox({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // Cycle the placeholder while empty + unfocused
+  useEffect(() => {
+    if (focused || value.length > 0) return;
+    const id = setInterval(() => {
+      setPhIdx((i) => (i + 1) % PLACEHOLDERS.length);
+    }, 3500);
+    return () => clearInterval(id);
+  }, [focused, value.length]);
 
   function go(parsed: ReturnType<typeof parseInput>) {
     if (parsed.kind === "address") {
@@ -81,16 +99,14 @@ export function CaPasteBox({
     }
   }
 
-  // Magnetic button — translates a few px toward the cursor when hovered
   const onButtonMove = (e: ReactMouseEvent<HTMLButtonElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    const dx = (e.clientX - (r.left + r.width / 2)) * 0.18;
-    const dy = (e.clientY - (r.top + r.height / 2)) * 0.22;
+    const dx = (e.clientX - (r.left + r.width / 2)) * 0.20;
+    const dy = (e.clientY - (r.top + r.height / 2)) * 0.24;
     setMagnet({ x: dx, y: dy });
   };
   const onButtonLeave = () => setMagnet({ x: 0, y: 0 });
 
-  // Ripple on click — short-lived animated span at click position
   const spawnRipple = (e: ReactMouseEvent<HTMLButtonElement>) => {
     if (!buttonRef.current) return;
     const r = buttonRef.current.getBoundingClientRect();
@@ -105,18 +121,35 @@ export function CaPasteBox({
 
   const canSubmit = trimmed.length > 0;
 
+  // Heat-tinted ambient glow color
+  const heatClamped = Math.max(0, Math.min(1, heat));
+  const ambientGlow =
+    heatClamped >= 0.5
+      ? `rgba(255, 45, 156, ${0.10 + heatClamped * 0.10})`
+      : `rgba(94, 92, 255, ${0.08 + (1 - heatClamped) * 0.06})`;
+
   return (
     <form
       onSubmit={submit}
-      className="relative w-full max-w-2xl mx-auto"
+      className="relative w-full max-w-3xl mx-auto"
       autoComplete="off"
       role="search"
     >
+      {/* Ambient bloom that follows market heat — sits behind the box */}
+      <div
+        aria-hidden
+        className="absolute -inset-6 rounded-[2.5rem] pointer-events-none transition-colors duration-1000"
+        style={{
+          background: `radial-gradient(ellipse 60% 80% at 50% 50%, ${ambientGlow}, transparent 70%)`,
+          filter: "blur(40px)",
+        }}
+      />
+
       <div className="relative">
         {/* Animated gradient ring on focus */}
         <div
           aria-hidden
-          className={`pointer-events-none absolute -inset-px rounded-3xl transition-opacity duration-500 ${
+          className={`pointer-events-none absolute -inset-px rounded-[1.75rem] transition-opacity duration-500 ${
             focused && !error ? "opacity-100" : "opacity-0"
           }`}
           style={{
@@ -129,19 +162,19 @@ export function CaPasteBox({
         />
 
         <div
-          className={`relative flex items-center w-full p-2 rounded-3xl transition-all duration-500 ${
+          className={`relative flex items-center w-full p-2.5 rounded-[1.75rem] transition-all duration-500 ${
             error
               ? "shadow-[0_8px_32px_rgba(255,71,87,0.18)]"
               : justPasted
                 ? "shadow-[0_18px_50px_rgba(20,241,149,0.25)]"
                 : focused
-                  ? "shadow-[0_18px_50px_rgba(255,45,156,0.18)]"
-                  : "shadow-[0_10px_40px_rgba(10,10,30,0.06),0_0_0_1px_rgba(10,10,30,0.05)]"
+                  ? "shadow-[0_22px_60px_rgba(255,45,156,0.20)]"
+                  : "shadow-[0_18px_50px_rgba(10,10,30,0.07),0_0_0_1px_rgba(10,10,30,0.05)]"
           }`}
           style={{
-            background: "rgba(255, 255, 255, 0.86)",
-            backdropFilter: "blur(20px) saturate(160%)",
-            WebkitBackdropFilter: "blur(20px) saturate(160%)",
+            background: "rgba(255, 255, 255, 0.92)",
+            backdropFilter: "blur(24px) saturate(170%)",
+            WebkitBackdropFilter: "blur(24px) saturate(170%)",
             border: error
               ? "1px solid rgba(255, 71, 87, 0.4)"
               : focused
@@ -149,42 +182,54 @@ export function CaPasteBox({
                 : "1px solid rgba(10, 10, 30, 0.05)",
           }}
         >
-          <div className="pl-4 pr-2 text-text-muted">
+          <div className="pl-5 pr-3 text-text-muted">
             <SearchIcon focused={focused} />
           </div>
 
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="text"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            placeholder="Paste a Solana contract address…"
-            value={value}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            onChange={(e) => {
-              setValue(e.target.value);
-              if (error) setError(null);
-            }}
-            onPaste={(e) => {
-              const pasted = e.clipboardData.getData("text").trim();
-              if (pasted.length >= 32) {
-                setJustPasted(true);
-                setTimeout(() => setJustPasted(false), 800);
-                setTimeout(() => {
-                  setValue(pasted);
-                  go(parseInput(pasted));
-                }, 30);
-              }
-            }}
-            className="flex-1 bg-transparent text-text-primary text-[15px] sm:text-[16px] text-mono placeholder:text-text-muted/85 outline-none px-1 py-3 min-w-0"
-            aria-label="Solana token address"
-          />
+          <div className="relative flex-1 min-w-0">
+            <input
+              ref={inputRef}
+              type="text"
+              inputMode="text"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder=""
+              value={value}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              onChange={(e) => {
+                setValue(e.target.value);
+                if (error) setError(null);
+              }}
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData("text").trim();
+                if (pasted.length >= 32) {
+                  setJustPasted(true);
+                  setTimeout(() => setJustPasted(false), 800);
+                  setTimeout(() => {
+                    setValue(pasted);
+                    go(parseInput(pasted));
+                  }, 30);
+                }
+              }}
+              className="w-full bg-transparent text-text-primary text-[16px] sm:text-[17px] text-mono outline-none py-4 sm:py-5 min-w-0"
+              aria-label="Solana token address"
+            />
+            {/* Cycling placeholder — fades between phrases */}
+            {value.length === 0 && !focused && (
+              <div
+                key={phIdx}
+                aria-hidden
+                className="absolute inset-y-0 left-0 flex items-center pointer-events-none animate-fade-in text-text-muted/85 text-[16px] sm:text-[17px] text-mono"
+              >
+                {PLACEHOLDERS[phIdx]}
+              </div>
+            )}
+          </div>
 
-          {/* Validation badge — slides in when state changes */}
-          <div className="flex items-center gap-2 mr-1.5 shrink-0">
+          {/* Validation slot */}
+          <div className="flex items-center gap-2 mr-2 shrink-0">
             <ValidationBadge
               valid={valid}
               tooShort={tooShort}
@@ -194,9 +239,9 @@ export function CaPasteBox({
             />
           </div>
 
-          {/* ⌘V hint — only when empty + unfocused */}
+          {/* ⌘V hint when empty */}
           {!focused && value.length === 0 && (
-            <div className="hidden md:flex items-center gap-1 mr-2 pointer-events-none">
+            <div className="hidden md:flex items-center gap-1 mr-3 pointer-events-none">
               <kbd
                 className="text-[10px] text-text-muted text-mono px-1.5 py-0.5 rounded"
                 style={{
@@ -209,7 +254,7 @@ export function CaPasteBox({
             </div>
           )}
 
-          {/* Magnetic + rippling submit button */}
+          {/* CTA */}
           <button
             ref={buttonRef}
             type="submit"
@@ -217,37 +262,36 @@ export function CaPasteBox({
             onMouseMove={onButtonMove}
             onMouseLeave={onButtonLeave}
             onMouseDown={spawnRipple}
-            className={`relative overflow-hidden px-5 sm:px-7 h-[48px] sm:h-[52px] rounded-2xl font-bold text-[13px] tracking-tight transition-all ${
+            className={`relative overflow-hidden px-6 sm:px-8 h-[56px] sm:h-[60px] rounded-2xl font-bold text-[14px] tracking-tight transition-all ${
               canSubmit
-                ? "bg-text-primary text-bg-primary hover:scale-[1.04] active:scale-[0.97] shadow-[0_4px_16px_rgba(10,10,30,0.18)]"
-                : "bg-text-muted/15 text-text-muted cursor-not-allowed"
+                ? "text-white hover:scale-[1.04] active:scale-[0.97] shadow-[0_6px_20px_rgba(10,10,30,0.22)]"
+                : "bg-text-muted/12 text-text-muted cursor-not-allowed"
             } disabled:opacity-60`}
             style={{
               transform: canSubmit
                 ? `translate(${magnet.x}px, ${magnet.y}px)`
                 : undefined,
-              transition: "transform 200ms cubic-bezier(0.22,1,0.36,1), background 300ms, color 300ms, box-shadow 300ms",
+              transition:
+                "transform 200ms cubic-bezier(0.22,1,0.36,1), box-shadow 300ms",
               background: canSubmit
-                ? `linear-gradient(110deg, #0a0a14 0%, #0a0a14 50%, ${
-                    valid ? "#FF2D9C" : "#1f1f30"
+                ? `linear-gradient(110deg, #0a0a14 0%, #1a1a2e 45%, ${
+                    valid ? "#FF2D9C" : "#1a1a2e"
                   } 100%)`
                 : undefined,
             }}
           >
-            {/* Cursor-following highlight inside the button */}
             {canSubmit && (
               <span
                 aria-hidden
                 className="absolute inset-0 pointer-events-none opacity-0 hover:opacity-100"
                 style={{
-                  background: `radial-gradient(120px circle at ${50 + magnet.x * 6}% ${
-                    50 + magnet.y * 6
-                  }%, rgba(255,45,156,0.45), transparent 65%)`,
+                  background: `radial-gradient(140px circle at ${
+                    50 + magnet.x * 6
+                  }% ${50 + magnet.y * 6}%, rgba(255,45,156,0.50), transparent 65%)`,
                 }}
               />
             )}
 
-            {/* Click ripples */}
             {ripples.map((r) => (
               <span
                 key={r.id}
@@ -275,12 +319,7 @@ export function CaPasteBox({
               ) : (
                 <span className="inline-flex items-center gap-1.5">
                   Read pulse
-                  <span
-                    aria-hidden
-                    className="transition-transform duration-300 group-hover:translate-x-0.5"
-                  >
-                    →
-                  </span>
+                  <span aria-hidden>→</span>
                 </span>
               )}
             </span>
@@ -300,12 +339,12 @@ export function CaPasteBox({
 function SearchIcon({ focused }: { focused: boolean }) {
   return (
     <svg
-      width="20"
-      height="20"
+      width="22"
+      height="22"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={focused ? 2.5 : 2.2}
+      strokeWidth={focused ? 2.6 : 2.2}
       strokeLinecap="round"
       strokeLinejoin="round"
       className={`transition-colors ${focused ? "text-text-primary" : "text-text-muted"}`}
@@ -317,7 +356,6 @@ function SearchIcon({ focused }: { focused: boolean }) {
   );
 }
 
-/** Live validation pill — shifts color/icon as the user types. */
 function ValidationBadge({
   valid,
   tooShort,
@@ -332,7 +370,6 @@ function ValidationBadge({
   focused: boolean;
 }) {
   if (empty) return null;
-
   if (valid) {
     return (
       <div
@@ -348,7 +385,6 @@ function ValidationBadge({
       </div>
     );
   }
-
   if (wrongShape) {
     return (
       <div
@@ -364,7 +400,6 @@ function ValidationBadge({
       </div>
     );
   }
-
   if (tooShort && focused) {
     return (
       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10.5px] font-medium text-text-muted">
@@ -373,7 +408,6 @@ function ValidationBadge({
       </div>
     );
   }
-
   return null;
 }
 
