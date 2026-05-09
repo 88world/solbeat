@@ -68,9 +68,23 @@ export function Hero() {
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-12 lg:gap-8 items-center">
           {/* LEFT — copy + trending */}
           <div className="flex flex-col items-start text-left order-2 lg:order-1">
+            {/* Tiny "what is this" badge above the headline */}
+            <div
+              data-fade-up
+              className="inline-flex items-center gap-2 px-2.5 py-1 mb-5 rounded-full text-[10.5px] font-bold uppercase tracking-[0.16em]"
+              style={{
+                background: "rgba(255, 45, 156, 0.08)",
+                color: "#a01660",
+                border: "1px solid rgba(255, 45, 156, 0.22)",
+              }}
+            >
+              <span className="size-1.5 rounded-full bg-accent-pulse animate-pulse" />
+              Block Valley · AI reasoning layer
+            </div>
+
             <h1
               data-fade-up
-              className="font-extrabold tracking-[-0.04em] leading-[1.04] text-text-primary text-[clamp(2.4rem,5.4vw,4.5rem)]"
+              className="font-extrabold tracking-[-0.04em] leading-[1.02] text-text-primary text-[clamp(2.4rem,5.4vw,4.5rem)]"
             >
               The pulse
               <br />
@@ -88,8 +102,12 @@ export function Hero() {
               data-fade-up
               className="mt-5 text-text-secondary text-[15px] sm:text-[16px] leading-relaxed max-w-md font-medium"
             >
-              Real-time contract analysis, on-chain data, and social sentiment.
-              Drop a CA — see the data breathe.
+              Paste any contract. Get an{" "}
+              <span className="text-text-primary font-semibold">
+                AI-decoded read
+              </span>{" "}
+              — on-chain truth, X sentiment, and live catalysts in one paragraph.
+              No more squinting at DEXScreener.
             </p>
 
             <div data-fade-up className="mt-10 hidden lg:block">
