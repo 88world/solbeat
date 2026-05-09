@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  /* SolBeat design tokens — dark, cinematic, calm */
+  /* SolBeat design tokens — dark default for data-dense screens */
   --bg-primary: #0a0a0f;
   --bg-elevated: #12121a;
   --bg-glass: rgba(18, 18, 26, 0.6);
@@ -13,9 +13,10 @@
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-emphasized: rgba(255, 255, 255, 0.12);
 
-  --accent-primary: #9945ff;     /* Solana purple */
+  --accent-primary: #6b7fff;     /* Block Valley brand blue/purple */
   --accent-secondary: #14f195;   /* Solana green */
   --accent-pulse: #ff2d9c;       /* Block Valley pink — heartbeat */
+  --accent-blue: #5e5cff;        /* Brighter blue for iridescence */
 
   --signal-positive: #14f195;
   --signal-negative: #ff4757;
@@ -25,6 +26,20 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --duration: 400ms;
   --pulse-period: 1200ms;
+}
+
+/* Light scope — wraps the hero so it reads bright + premium (BV brand light bg). */
+[data-theme="light"] {
+  --bg-primary: #fcfcfe;
+  --bg-elevated: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.72);
+
+  --text-primary: #0a0a14;
+  --text-secondary: #4a4a5e;
+  --text-muted: #8a8a9e;
+
+  --border-subtle: rgba(10, 10, 20, 0.06);
+  --border-emphasized: rgba(10, 10, 20, 0.12);
 }
 
 @theme inline {
@@ -38,6 +53,7 @@
   --color-accent-primary: var(--accent-primary);
   --color-accent-secondary: var(--accent-secondary);
   --color-accent-pulse: var(--accent-pulse);
+  --color-accent-blue: var(--accent-blue);
   --color-signal-positive: var(--signal-positive);
   --color-signal-negative: var(--signal-negative);
   --color-signal-warning: var(--signal-warning);
@@ -127,6 +143,21 @@ body {
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
+}
+
+@keyframes text-shimmer {
+  0%   { background-position: 0% center; }
+  100% { background-position: -200% center; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.text-shimmer {
+  background-size: 200% auto;
+  animation: text-shimmer 5s linear infinite;
 }
 
 @keyframes drift-a {

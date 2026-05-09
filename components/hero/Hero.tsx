@@ -3,42 +3,30 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, stagger } from "animejs";
 import { PulseSphere } from "./PulseSphere";
-import { TrendingRing } from "./TrendingRing";
+import { TrendingList } from "./TrendingList";
 import { CaPasteBox } from "./CaPasteBox";
 import { AmbientOrbs } from "./AmbientOrbs";
 
 export function Hero() {
   const [bpm, setBpm] = useState(50);
-  const [ringRadius, setRingRadius] = useState(360);
-  const [sphereSize, setSphereSize] = useState(220);
+  const [sphereSize, setSphereSize] = useState(440);
   const heroRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const compute = () => {
       const w = window.innerWidth;
-      const h = window.innerHeight;
-      // Sphere stays modest. Ring radius adapts to whichever is smaller (w/h).
-      const reach = Math.min(w, h);
-      if (w < 480) {
-        setSphereSize(140);
-        setRingRadius(Math.max(140, reach * 0.36));
-      } else if (w < 768) {
-        setSphereSize(180);
-        setRingRadius(Math.max(220, reach * 0.34));
-      } else if (w < 1100) {
-        setSphereSize(220);
-        setRingRadius(Math.max(280, reach * 0.32));
-      } else {
-        setSphereSize(240);
-        setRingRadius(Math.min(380, reach * 0.32));
-      }
+      if (w < 480) setSphereSize(280);
+      else if (w < 768) setSphereSize(360);
+      else if (w < 1100) setSphereSize(380);
+      else if (w < 1440) setSphereSize(440);
+      else setSphereSize(500);
     };
     compute();
     window.addEventListener("resize", compute);
     return () => window.removeEventListener("resize", compute);
   }, []);
 
-  // Anime.js entrance choreography
+  // Entrance choreography
   useEffect(() => {
     const root = heroRef.current;
     if (!root) return;
@@ -47,9 +35,9 @@ export function Hero() {
     if (fadeUp.length) {
       animate(fadeUp, {
         opacity: [0, 1],
-        translateY: [16, 0],
-        duration: 700,
-        delay: stagger(120, { start: 100 }),
+        translateY: [18, 0],
+        duration: 800,
+        delay: stagger(110, { start: 80 }),
         ease: "out(3)",
       });
     }
@@ -57,13 +45,12 @@ export function Hero() {
     if (sphereIn.length) {
       animate(sphereIn, {
         opacity: [0, 1],
-        scale: [0.8, 1],
-        duration: 1200,
-        delay: 50,
+        scale: [0.85, 1],
+        duration: 1300,
+        delay: 100,
         ease: "out(4)",
       });
     }
-    // Ticker entrance is owned by TrendingRing — it knows when data lands.
   }, []);
 
   return (
@@ -74,70 +61,74 @@ export function Hero() {
     >
       <AmbientOrbs />
 
-      {/* Sphere + ring as the centerpiece visual layer (behind content) */}
-      <div
-        className="absolute inset-0 flex items-center justify-center pointer-events-none"
-        aria-hidden
-      >
-        <div className="relative">
-          <TrendingRing radius={ringRadius} />
-          <div
-            data-sphere-in
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-            onMouseEnter={() => setBpm(78)}
-            onMouseLeave={() => setBpm(50)}
-            style={{ pointerEvents: "auto" }}
-          >
-            <PulseSphere size={sphereSize} bpm={bpm} />
+      <div className="relative z-10 mx-auto max-w-[1280px] w-full px-6 lg:px-10 pt-10 lg:pt-16 pb-40">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-12 lg:gap-8 items-center">
+          {/* LEFT — copy + trending */}
+          <div className="flex flex-col items-start text-left order-2 lg:order-1">
+            <h1
+              data-fade-up
+              className="font-extrabold tracking-[-0.04em] leading-[1.04] text-text-primary text-[clamp(2.4rem,5.4vw,4.5rem)]"
+            >
+              The pulse
+              <br />
+              <span
+                className="inline-block bg-clip-text text-transparent text-shimmer pb-1"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(110deg, #FF2D9C 0%, #5E5CFF 35%, #14F195 70%, #FF2D9C 100%)",
+                }}
+              >
+                of Solana.
+              </span>
+            </h1>
+            <p
+              data-fade-up
+              className="mt-5 text-text-secondary text-[15px] sm:text-[16px] leading-relaxed max-w-md font-medium"
+            >
+              Real-time contract analysis, on-chain data, and social sentiment.
+              Drop a CA — see the data breathe.
+            </p>
+
+            <div data-fade-up className="mt-10 hidden lg:block">
+              <TrendingList limit={5} />
+            </div>
           </div>
+
+          {/* RIGHT — sphere */}
+          <div className="relative flex items-center justify-center order-1 lg:order-2">
+            <div
+              data-sphere-in
+              onMouseEnter={() => setBpm(80)}
+              onMouseLeave={() => setBpm(50)}
+            >
+              <PulseSphere size={sphereSize} bpm={bpm} />
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile-only trending below the sphere */}
+        <div data-fade-up className="lg:hidden mt-10 flex justify-center">
+          <TrendingList limit={4} />
         </div>
       </div>
 
-      {/* Foreground content: headline anchored top, CTA anchored bottom */}
+      {/* Bottom-anchored search */}
       <div
-        className="relative z-10 flex flex-col items-center justify-between min-h-[calc(100svh-64px)] px-4 sm:px-6 py-16 sm:py-20 pointer-events-none"
+        data-fade-up
+        className="absolute left-0 right-0 bottom-6 sm:bottom-10 px-6 z-20"
       >
-        <div className="text-center max-w-3xl pointer-events-auto">
-          <h1
-            data-fade-up
-            className="font-semibold tracking-[-0.04em] leading-[1.02] text-[clamp(2rem,4.6vw,3.75rem)]"
-            style={{ textShadow: "0 0 30px rgba(10, 10, 15, 0.85)" }}
-          >
-            <span className="text-text-primary">The pulse of every</span>{" "}
-            <span className="bg-gradient-to-r from-accent-pulse via-accent-primary to-accent-secondary bg-clip-text text-transparent">
-              Solana token.
-            </span>
-          </h1>
-          <p
-            data-fade-up
-            className="mt-4 text-text-secondary text-[13px] sm:text-[14px] leading-relaxed"
-          >
-            On-chain data, X sentiment, and recent catalysts —
-            <br className="hidden sm:inline" />
-            synthesized by AI into one read.
-          </p>
-        </div>
-
-        {/* Spacer so the sphere area between headline and CTA stays empty */}
-        <div className="flex-1" />
-
-        <div
-          className="w-full max-w-[640px] pointer-events-auto"
-          data-fade-up
-        >
-          <CaPasteBox
-            onPulse={(kind) => {
-              if (kind === "valid") setBpm(120);
-              else setBpm(72);
-              setTimeout(() => setBpm(50), 1200);
-            }}
-          />
-          <p className="mt-3.5 text-center text-[11.5px] text-text-muted">
-            try{" "}
-            <TickerHint />
-            {" "}or paste any contract address
-          </p>
-        </div>
+        <CaPasteBox
+          onPulse={(kind) => {
+            if (kind === "valid") setBpm(160);
+            else setBpm(80);
+            setTimeout(() => setBpm(50), 2500);
+          }}
+        />
+        <p className="mt-3.5 text-center text-[11px] sm:text-[12px] text-text-muted">
+          try{" "}
+          <TickerHint />
+          {" "}or paste any contract · ⌘V from anywhere
+        </p>
       </div>
     </section>
   );
@@ -148,13 +139,16 @@ const HINT_TICKERS = ["$BONK", "$WIF", "$JUP", "$POPCAT", "$JTO", "$PYTH"] as co
 function TickerHint() {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setIdx((i) => (i + 1) % HINT_TICKERS.length), 2200);
+    const id = setInterval(
+      () => setIdx((i) => (i + 1) % HINT_TICKERS.length),
+      2200,
+    );
     return () => clearInterval(id);
   }, []);
   return (
     <span
       key={idx}
-      className="text-text-secondary font-medium animate-fade-in inline-block"
+      className="text-text-secondary font-semibold animate-fade-in inline-block"
     >
       {HINT_TICKERS[idx]}
     </span>

@@ -25,7 +25,7 @@ export function WalletButton() {
       <button
         type="button"
         onClick={() => setVisible(true)}
-        className="h-9 px-4 rounded-full text-[13px] font-medium bg-white text-black hover:bg-white/90 transition disabled:opacity-50"
+        className="h-9 px-4 rounded-full text-[13px] font-semibold bg-text-primary text-bg-primary hover:opacity-90 hover:scale-[1.03] active:scale-[0.97] transition-all disabled:opacity-50"
         disabled={connecting}
       >
         {connecting ? "Connecting…" : "Connect wallet"}
