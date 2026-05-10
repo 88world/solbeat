@@ -8,7 +8,6 @@ import { ScrollReveal } from "@/components/shared/ScrollReveal";
 export default function Home() {
   return (
     <div
-      data-theme="light"
       className="relative flex flex-col min-h-screen"
       style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}
     >

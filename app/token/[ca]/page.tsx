@@ -53,7 +53,6 @@ export default async function TokenPage({ params }: PageProps) {
   if (noData) {
     return (
       <div
-        data-theme="light"
         className="flex flex-col min-h-screen"
         style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}
       >
@@ -149,7 +148,6 @@ export default async function TokenPage({ params }: PageProps) {
 
   return (
     <div
-      data-theme="light"
       className="relative flex flex-col min-h-screen"
       style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}
     >

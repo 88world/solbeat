@@ -10,7 +10,6 @@ export default async function TrendingPage() {
 
   return (
     <div
-      data-theme="light"
       className="flex flex-col min-h-screen"
       style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}
     >

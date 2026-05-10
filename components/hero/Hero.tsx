@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { animate, stagger } from "animejs";
-import { PulseFluid } from "./PulseFluid";
+import { TrendingTreemap } from "./TrendingTreemap";
 import { TrendingList } from "./TrendingList";
 import { CaPasteBox } from "./CaPasteBox";
 import { MarketPulse } from "./MarketPulse";
@@ -25,24 +25,22 @@ export function Hero() {
   const heat = transientHeat ?? snapshot?.heat ?? 0.2;
   const bpm = heatToBpm(heat);
 
-  const [sphereSize, setSphereSize] = useState(180);
+  const [sphereSize, setSphereSize] = useState(280);
   const heroRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const compute = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      // Smaller across the board, the user said "make it smaller, I hate
-      // how it looks" after the previous size+amplitude bump made the orb
-      // feel oversized. The CSS halo behind it carries the visual weight
-      // now, the orb itself can be more demure.
+      // Treemap centerpiece is data-dense, give it more canvas than the
+      // abstract sphere had. We want each tile readable at a glance.
       let target: number;
-      if (w < 480) target = 140;
-      else if (w < 768) target = 170;
-      else if (w < 1100) target = 190;
-      else if (w < 1440) target = 210;
-      else target = 220;
-      target = Math.min(target, Math.floor(h * 0.28));
+      if (w < 480) target = 240;
+      else if (w < 768) target = 280;
+      else if (w < 1100) target = 320;
+      else if (w < 1440) target = 360;
+      else target = 380;
+      target = Math.min(target, Math.floor(h * 0.45));
       setSphereSize(target);
     };
     compute();
@@ -155,7 +153,7 @@ export function Hero() {
             data-sphere-in
             className="flex items-center justify-center min-h-0"
           >
-            <PulseFluid size={sphereSize} heat={heat} bpm={bpm} />
+            <TrendingTreemap tokens={tokens} size={sphereSize} heat={heat} />
           </div>
 
           <div data-fade-up className="hidden lg:flex justify-start">
