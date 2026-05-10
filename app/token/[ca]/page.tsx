@@ -152,7 +152,7 @@ export default async function TokenPage({ params }: PageProps) {
           <div className="space-y-5">
             <AISynthesis synthesis={analysis.synthesis} />
             <SignalPanel analysis={analysis} />
-            <RiskScoreCard risk={analysis.risk} />
+            <RiskScoreCard analysis={analysis} />
             <CatalystFeed catalysts={analysis.catalysts} />
             <RecentTweets tweets={analysis.tweets} />
           </div>

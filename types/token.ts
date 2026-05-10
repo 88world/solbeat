@@ -36,6 +36,12 @@ export type TokenHolders = {
 
 export type TweetSnippet = {
   handle: string;
+  /** Display name on the X profile (falls back to handle if absent). */
+  display_name: string | null;
+  /** Profile picture URL — when present we render a real avatar instead of a gradient. */
+  avatar_url: string | null;
+  /** True if the upstream marks the account as verified. */
+  verified: boolean;
   followers: number;
   text: string;
   engagement: number;

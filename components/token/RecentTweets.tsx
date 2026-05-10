@@ -1,3 +1,5 @@
+"use client";
+
 import type { TweetSnippet } from "@/types/token";
 import { humanizeNumber } from "@/lib/utils";
 
@@ -39,9 +41,12 @@ export function RecentTweets({ tweets }: { tweets: TweetSnippet[] }) {
 }
 
 function TweetCard({ tweet }: { tweet: TweetSnippet }) {
-  const verified = tweet.followers > 100_000;
+  // Either the upstream marked the account verified, OR it's >100k followers
+  // (cheap proxy when the upstream doesn't surface verification status).
+  const verified = tweet.verified || tweet.followers > 100_000;
   const cleanText = humanizeTweetText(tweet.text);
   const tweetUrl = tweet.url ?? `https://x.com/${tweet.handle}`;
+  const displayName = tweet.display_name?.trim();
 
   return (
     <li>
@@ -52,13 +57,18 @@ function TweetCard({ tweet }: { tweet: TweetSnippet }) {
         className="block rounded-2xl border border-border-subtle px-4 py-3.5 hover:border-border-emphasized hover:bg-bg-elevated/40 transition group"
       >
         <div className="flex items-start gap-3">
-          <Avatar handle={tweet.handle} />
+          <Avatar handle={tweet.handle} avatarUrl={tweet.avatar_url} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap mb-1">
-              <span className="font-bold text-text-primary text-[13px] truncate">
+              {displayName && (
+                <span className="font-bold text-text-primary text-[13px] truncate">
+                  {displayName}
+                </span>
+              )}
+              {verified && <VerifiedDot />}
+              <span className="text-text-muted text-[12px] truncate">
                 @{tweet.handle}
               </span>
-              {verified && <VerifiedDot />}
               <span className="text-text-muted text-[11.5px]">·</span>
               <span className="text-text-muted text-[11.5px]">
                 {ago(tweet.age_minutes)}
@@ -87,9 +97,10 @@ function TweetCard({ tweet }: { tweet: TweetSnippet }) {
   );
 }
 
-function Avatar({ handle }: { handle: string }) {
+function Avatar({ handle, avatarUrl }: { handle: string; avatarUrl: string | null }) {
   const seed = hashHandle(handle);
-  // Pick gradient based on the handle so each user is consistent.
+  // Pick gradient based on the handle so each user is consistent (used as
+  // background while the avatar loads, and as fallback if it 404s).
   const gradients = [
     "linear-gradient(135deg, #FF2D9C, #5E5CFF)",
     "linear-gradient(135deg, #5E5CFF, #14F195)",
@@ -97,13 +108,32 @@ function Avatar({ handle }: { handle: string }) {
     "linear-gradient(135deg, #FF8B2D, #FF2D9C)",
     "linear-gradient(135deg, #8A6BFF, #FF2D9C)",
   ];
+  const gradient = gradients[seed % gradients.length];
+
+  // Always render the gradient + initial as a base layer, then overlay the
+  // <img> on top. If the img fails to load, hiding it reveals the fallback
+  // underneath. No onError handler needed — the browser just shows the alt
+  // styling, and our object-cover img stays hidden on broken src.
   return (
     <span
-      className="size-9 rounded-full shrink-0 flex items-center justify-center text-[13px] font-bold text-white"
-      style={{ background: gradients[seed % gradients.length] }}
-      aria-hidden
+      className="relative size-9 rounded-full shrink-0 overflow-hidden flex items-center justify-center text-[13px] font-bold text-white"
+      style={{ background: gradient }}
     >
-      {handle.slice(0, 1).toUpperCase()}
+      <span aria-hidden>{handle.slice(0, 1).toUpperCase()}</span>
+      {avatarUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={avatarUrl}
+          alt={`${handle} avatar`}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          className="absolute inset-0 size-full object-cover"
+          onError={(e) => {
+            // 404 / 403 → just hide the <img>; the gradient initial below shows through.
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
+      )}
     </span>
   );
 }
