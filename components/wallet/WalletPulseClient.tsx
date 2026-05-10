@@ -6,6 +6,7 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { PortfolioGrid, type HeldToken } from "./PortfolioGrid";
 import { ReclaimPanel } from "./ReclaimPanel";
 import { WalletSignalPanel } from "./WalletSignalPanel";
+import { HiddenSolHero } from "./HiddenSolHero";
 import { cn, shortAddress } from "@/lib/utils";
 
 type Tab = "portfolio" | "reclaim";
@@ -89,6 +90,14 @@ export function WalletPulseClient() {
           </TabBtn>
         </div>
       </header>
+
+      {/* Hidden SOL hero — Gemini's audit said the reclaim feature was
+          buried; surfacing it as the page's loudest element when scan
+          returns >0 SOL. Click jumps to the Hidden SOL tab. */}
+      <HiddenSolHero
+        address={publicKey.toBase58()}
+        onJump={() => setTab("reclaim")}
+      />
 
       {!loading && held && (
         <WalletSignalPanel held={held} emptyCount={emptyCount} />

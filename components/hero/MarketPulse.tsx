@@ -7,6 +7,7 @@ import { heatToBpm, heatLabel } from "@/lib/utils/heat";
 import { humanizeNumber, humanizePrice, pctChange } from "@/lib/utils";
 import type { TrendingToken } from "@/types/token";
 import { ECGTrace } from "./ECGTrace";
+import { HeartWave } from "./HeartWave";
 
 /**
  * Market vitals, concrete numbers a Solana trader actually scans for, no
@@ -183,10 +184,13 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
         </div>
       </div>
 
-      {/* Heat breakdown — show what's driving the BPM. The user complained
-          they don't know what kind of math runs the read; this is the math,
-          visible. Each bar fills 0..1 with its component value. */}
-      <HeatBars pulse={pulse} />
+      {/* Heat waveform — Gemini called out that progress bars aren't a
+          heartbeat, replaced with a Canvas2D continuous wave whose shape
+          IS the four heat components summed as sine carriers. SOL macro is
+          the slow underlying current, breadth is the chorus, volume is the
+          chatter, extreme spawns sharp gaussian spikes when fresh launches
+          rip. Lives, breathes, and reads the market state literally. */}
+      <HeatWaveDisplay pulse={pulse} />
 
       {/* SOL macro + 24h volume */}
       <div className="rounded-xl border border-border-subtle px-3 py-2.5 mb-3 bg-text-muted/[0.03]">
@@ -279,84 +283,101 @@ function pickLabelColor(label: ReturnType<typeof heatLabel>): string {
 }
 
 /**
- * Live heat-breakdown bars. Shows the four components feeding into the BPM
- * so the math is visible instead of a black box. Components match the
- * heat.ts formula: SOL macro × 0.40 + breadth × 0.30 + volume × 0.20 +
- * extreme × 0.10.
+ * Live heat waveform display. Hands the four heat components to the
+ * Canvas2D HeartWave which renders a continuous sine-stack as a single
+ * fluid trace. Tiny inline labels under the wave name the components
+ * with their current values + weights so the math is still legible.
  */
-function HeatBars({ pulse }: { pulse: HeatSnapshot }) {
-  // SOL component derived inline (matches heat.ts).
+function HeatWaveDisplay({ pulse }: { pulse: HeatSnapshot }) {
   const solChange = Math.abs(pulse.sol?.price_change_24h ?? 0);
   const solComponent = Math.min(1, solChange / 25);
-  // Extreme — count of parabolic (>500%) movers, saturates at 5.
   const parabolic = [
     pulse.topMover?.price_change_24h,
     pulse.biggestDump?.price_change_24h,
   ].filter((c) => c != null && Math.abs(c) >= 500).length;
   const extreme = Math.min(1, parabolic / 5);
 
-  const items = [
-    {
-      label: "SOL macro",
-      value: solComponent,
-      color: "#14F195",
-      weight: "40%",
-    },
-    {
-      label: "Breadth",
-      value: pulse.breakdown.breadth,
-      color: "#5e5cff",
-      weight: "30%",
-    },
-    {
-      label: "Volume",
-      value: pulse.breakdown.volume,
-      color: "#FFB938",
-      weight: "20%",
-    },
-    {
-      label: "Extreme",
-      value: extreme,
-      color: "#FF2D9C",
-      weight: "10%",
-    },
-  ];
   return (
-    <div className="rounded-xl bg-text-muted/[0.03] border border-border-subtle px-3 py-2 mb-3">
-      <div className="flex items-center justify-between mb-1.5">
+    <div className="rounded-xl bg-text-muted/[0.03] border border-border-subtle px-3 py-2.5 mb-3">
+      <div className="flex items-center justify-between mb-1">
         <span className="text-[9px] uppercase tracking-[0.20em] text-text-muted font-bold">
           What's driving it
         </span>
         <span className="text-[8.5px] uppercase tracking-[0.20em] text-text-muted font-mono">
-          weighted
+          live waveform
         </span>
       </div>
-      <div className="space-y-1.5">
-        {items.map((it) => (
-          <div key={it.label} className="flex items-center gap-2">
-            <span className="text-[9px] uppercase tracking-[0.14em] font-bold text-text-secondary w-[58px] shrink-0">
-              {it.label}
-            </span>
-            <div className="flex-1 h-[6px] rounded-full bg-text-muted/10 overflow-hidden">
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${Math.round(it.value * 100)}%`,
-                  background: `linear-gradient(90deg, ${it.color}77, ${it.color})`,
-                  boxShadow: `0 0 8px ${it.color}55`,
-                  transition:
-                    "width 700ms cubic-bezier(0.22, 1, 0.36, 1), background 400ms ease",
-                }}
-              />
-            </div>
-            <span
-              className="text-[10px] font-mono text-text-muted w-10 text-right tabular-nums"
-              title={`${it.label} contributes ${it.weight} of total heat`}
-            >
-              {(it.value * 100).toFixed(0)}
-            </span>
-          </div>
-        ))}
+      <div className="-mx-1">
+        <HeartWave
+          heat={pulse.heat}
+          sol={solComponent}
+          breadth={pulse.breakdown.breadth}
+          volume={pulse.breakdown.volume}
+          extreme={extreme}
+          width={300}
+          height={70}
+        />
+      </div>
+      <div className="grid grid-cols-4 gap-1 mt-1.5">
+        <WaveLegend
+          label="SOL"
+          value={solComponent}
+          color="#14F195"
+          weight={40}
+        />
+        <WaveLegend
+          label="Breadth"
+          value={pulse.breakdown.breadth}
+          color="#5e5cff"
+          weight={30}
+        />
+        <WaveLegend
+          label="Volume"
+          value={pulse.breakdown.volume}
+          color="#FFB938"
+          weight={20}
+        />
+        <WaveLegend
+          label="Extreme"
+          value={extreme}
+          color="#FF2D9C"
+          weight={10}
+        />
+      </div>
+    </div>
+  );
+}
+
+function WaveLegend({
+  label,
+  value,
+  color,
+  weight,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  weight: number;
+}) {
+  return (
+    <div
+      className="flex flex-col items-start gap-0.5"
+      title={`${label} contributes ${weight}% of heat (current value: ${(value * 100).toFixed(0)})`}
+    >
+      <div className="flex items-center gap-1">
+        <span className="size-1.5 rounded-full" style={{ background: color }} />
+        <span className="text-[8.5px] uppercase tracking-[0.14em] font-bold text-text-secondary leading-none">
+          {label}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-1 leading-none">
+        <span
+          className="text-[12px] font-mono font-bold tabular-nums"
+          style={{ color }}
+        >
+          {Math.round(value * 100)}
+        </span>
+        <span className="text-[8px] text-text-muted font-mono">·{weight}%</span>
       </div>
     </div>
   );
