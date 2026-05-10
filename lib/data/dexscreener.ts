@@ -141,6 +141,13 @@ export async function searchBySymbol(query: string): Promise<TrendingToken[]> {
     if (SKIP_BASE_SYMBOLS.has(baseSym)) return false;
     const quoteSym = (p.quoteToken.symbol ?? "").toUpperCase();
     if (!ACCEPTED_QUOTES.has(quoteSym)) return false;
+    // Reality filter. Without this, scam tokens with inflated FDV (multi-
+    // billion mcap on a thousand-dollar pool) outrank real tokens like BONK
+    // because we sort by mcap. Require either real liquidity OR real volume,
+    // both at $5k floors. Tokens that fail both are dust or rugs.
+    const liq = p.liquidity?.usd ?? 0;
+    const vol = p.volume?.h24 ?? 0;
+    if (liq < 5_000 && vol < 5_000) return false;
     // Symbol or name has to actually contain the query, DexScreener's search
     // is permissive and returns adjacent matches we don't want.
     const Q = q.toUpperCase();
@@ -158,17 +165,49 @@ export async function searchBySymbol(query: string): Promise<TrendingToken[]> {
     }
   }
 
-  // Rank: exact-symbol matches first, then by liquidity.
+  // Rank: exact-symbol matches first, then by liquidity-weighted market cap.
+  //
+  // Plain mcap-sort puts $2B BONK scams above the real $633M BONK because
+  // anyone can mint a token with 1B supply at $2/token and report a $2B
+  // FDV. Real coins prove their cap with deep liquidity. We multiply mcap
+  // by a liquidity-proof factor that saturates at $50k, anything above that
+  // is "real enough" and gets full mcap credit; below that, the score is
+  // discounted proportionally.
+  //
+  //   real BONK ($633M cap, $2.36M liq):  633M × 1.0 = 633M
+  //   fake BONK ($2B cap, $5k liq):       2B × 0.1 = 200M
+  //
+  // → real BONK ranks above the fake.
   const Q = q.toUpperCase();
   return Array.from(byToken.values())
     .sort((a, b) => {
       const aExact = (a.baseToken.symbol ?? "").toUpperCase() === Q ? 1 : 0;
       const bExact = (b.baseToken.symbol ?? "").toUpperCase() === Q ? 1 : 0;
       if (aExact !== bExact) return bExact - aExact;
-      return (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0);
+      return realnessScore(b) - realnessScore(a);
     })
     .slice(0, 20)
     .map((p) => mapPairToToken(p));
+}
+
+function realnessScore(p: DexPair): number {
+  // mcap × sqrt(volume-proof). The "real one" search problem is volume,
+  // not liquidity, scammers park huge LP to game liquidity-based ranking
+  // but they can't fake daily trading. Real BONK does $24M/day; the $2B
+  // "Bonk Coin" knockoff with $22M parked LP does $3.97/day.
+  //
+  //   score = mcap × sqrt(min(1, volume_h24 / 100_000))
+  //
+  //   real BONK   ($633M, $24M vol):    633M × sqrt(1.0)   = 633M
+  //   fake $2.16B ($2.16B, $3.97 vol):  2.16B × sqrt(0.0)  = ~14M
+  //   fake $2.06B ($2.06B, low vol):    likewise crushed
+  //
+  // sqrt softens the discount, a token at $50k vol still gets ~70% credit.
+  // Anything with $100k+/day volume gets full mcap credit.
+  const mcap = p.marketCap ?? p.fdv ?? 0;
+  const vol = p.volume?.h24 ?? 0;
+  const volProof = Math.sqrt(Math.min(1, vol / 100_000));
+  return mcap * volProof;
 }
 
 export async function fetchTrending(): Promise<TrendingToken[]> {

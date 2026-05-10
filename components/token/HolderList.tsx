@@ -52,7 +52,7 @@ export function HolderList({
   const hasMore = holders.top_20.length > 10;
 
   return (
-    <div className="glass rounded-2xl p-5 sm:p-6">
+    <div className="glass rounded-2xl p-5 sm:p-6 h-full flex flex-col">
       <div className="flex items-baseline justify-between mb-4">
         <h3 className="text-[10px] uppercase tracking-[0.2em] text-text-muted font-bold">
           {expanded ? "Top 20 holders" : "Top 10 holders"}

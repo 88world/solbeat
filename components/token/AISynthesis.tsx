@@ -6,7 +6,7 @@ import { PulseGlyph } from "@/components/shared/Logo";
 
 export function AISynthesis({ synthesis }: { synthesis: TokenSynthesis | null }) {
   return (
-    <section className="glass rounded-2xl p-5 sm:p-7">
+    <section className="glass rounded-2xl p-5 sm:p-7 h-full">
       <header className="flex items-center gap-2 mb-4">
         <PulseGlyph size={18} />
         <h2 className="text-[13px] uppercase tracking-[0.18em] text-text-secondary font-medium">

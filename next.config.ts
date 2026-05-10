@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@solana/web3.js", "@solana/spl-token"],
+  // Hide Next.js's dev-mode "N" overlay so it doesn't show up in screenshots
+  // / screen recordings during the demo.
+  devIndicators: false,
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.helius-rpc.com" },

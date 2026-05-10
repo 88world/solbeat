@@ -18,7 +18,7 @@ export function BubbleMap({ ca }: { ca: string }) {
   const url = `https://app.bubblemaps.io/sol/token/${ca}`;
 
   return (
-    <div className="glass rounded-2xl overflow-hidden">
+    <div className="glass rounded-2xl overflow-hidden h-full flex flex-col">
       <div className="flex items-center justify-between px-5 py-3 border-b border-border-subtle">
         <h3 className="text-[10px] uppercase tracking-[0.2em] text-text-muted font-bold">
           Holder map
@@ -32,7 +32,7 @@ export function BubbleMap({ ca }: { ca: string }) {
           Open on Bubblemaps <span className="text-[8px]" aria-hidden>↗</span>
         </a>
       </div>
-      <div className="relative" style={{ aspectRatio: "1.4 / 1" }}>
+      <div className="relative flex-1" style={{ minHeight: 360 }}>
         {!errored && (
           <iframe
             src={url}

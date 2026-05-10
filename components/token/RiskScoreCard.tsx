@@ -34,7 +34,7 @@ export function RiskScoreCard({ analysis }: { analysis: TokenAnalysis }) {
   const findings = composeFindings(analysis, risk);
 
   return (
-    <div className="glass rounded-2xl p-5 sm:p-6">
+    <div className="glass rounded-2xl p-5 sm:p-6 h-full flex flex-col">
       <div className="flex items-center gap-5 mb-5">
         <div className="relative shrink-0">
           <svg width="96" height="96" viewBox="0 0 96 96">

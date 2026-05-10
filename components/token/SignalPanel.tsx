@@ -17,8 +17,17 @@ export function SignalPanel({ analysis }: { analysis: TokenAnalysis }) {
   const signals = computeSignals(analysis);
   const verdict = composeVerdict(signals);
 
+  // Severity counts so the user can see the verdict's evidence at a glance.
+  const counts = signals.reduce(
+    (acc, s) => {
+      acc[s.severity] = (acc[s.severity] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<Severity, number>,
+  );
+
   return (
-    <div className="glass rounded-2xl p-5 sm:p-6">
+    <div className="glass rounded-2xl p-5 sm:p-6 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-[10px] uppercase tracking-[0.2em] text-text-muted font-bold">
           Signal
@@ -39,6 +48,42 @@ export function SignalPanel({ analysis }: { analysis: TokenAnalysis }) {
         {signals.map((s, i) => (
           <SignalPill key={i} signal={s} />
         ))}
+      </div>
+
+      {/* Tally row at the bottom. Visually balances the card against the
+          longer Risk findings list to its right. */}
+      <div className="mt-auto pt-4 border-t border-border-subtle grid grid-cols-4 gap-2">
+        <Tally label="Good" count={counts.good ?? 0} color="#0a8f57" />
+        <Tally label="Watch" count={counts.warn ?? 0} color="#d6601a" />
+        <Tally label="Bad" count={counts.bad ?? 0} color="#c1374a" />
+        <Tally label="Neutral" count={counts.neutral ?? 0} color="#5a5a70" />
+      </div>
+    </div>
+  );
+}
+
+function Tally({
+  label,
+  count,
+  color,
+}: {
+  label: string;
+  count: number;
+  color: string;
+}) {
+  return (
+    <div className="text-center">
+      <div
+        className="text-[20px] font-semibold text-mono leading-none"
+        style={{ color: count > 0 ? color : "#9a9aae" }}
+      >
+        {count}
+      </div>
+      <div
+        className="text-[9px] uppercase tracking-[0.18em] font-bold mt-1.5"
+        style={{ color: count > 0 ? color : "#9a9aae" }}
+      >
+        {label}
       </div>
     </div>
   );

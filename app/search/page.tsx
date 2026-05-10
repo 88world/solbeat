@@ -73,17 +73,26 @@ export default async function SearchPage({ searchParams }: PageProps) {
                       {t.name}
                     </div>
                   </div>
+                  <div className="flex flex-col items-end shrink-0">
+                    <div className="text-text-primary text-mono text-[13px] font-semibold">
+                      {t.market_cap != null
+                        ? `$${humanizeNumber(t.market_cap)}`
+                        : t.fdv != null
+                          ? `$${humanizeNumber(t.fdv)}`
+                          : "-"}
+                    </div>
+                    <div className="text-text-muted text-[10px] uppercase tracking-[0.12em] font-bold">
+                      mcap
+                    </div>
+                  </div>
                   <div
                     className={
                       (t.price_change_24h ?? 0) >= 0
-                        ? "text-signal-positive text-mono text-[12px]"
-                        : "text-signal-negative text-mono text-[12px]"
+                        ? "text-signal-positive text-mono text-[12px] w-16 text-right"
+                        : "text-signal-negative text-mono text-[12px] w-16 text-right"
                     }
                   >
                     {pctChange(t.price_change_24h ?? 0)}
-                  </div>
-                  <div className="text-text-secondary text-mono text-[12px] w-20 text-right">
-                    ${humanizeNumber(t.volume_24h ?? 0)}
                   </div>
                 </Link>
               </li>
