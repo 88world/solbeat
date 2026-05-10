@@ -2,7 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import { animate, stagger } from "animejs";
-import { LiveFlow } from "./LiveFlow";
+import dynamic from "next/dynamic";
+
+// LiveFlow imports three.js (~600KB), lazy-load so the initial homepage
+// JS bundle stays small. SSR off — it's a WebGL canvas, no useful HTML.
+const LiveFlow = dynamic(() => import("./LiveFlow").then((m) => m.LiveFlow), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="rounded-2xl"
+      style={{
+        width: 360,
+        height: 360,
+        background: "var(--glass-medium)",
+        boxShadow: "inset 0 0 0 1px var(--border-subtle)",
+      }}
+    />
+  ),
+});
 import { TrendingList } from "./TrendingList";
 import { CaPasteBox } from "./CaPasteBox";
 import { MarketPulse } from "./MarketPulse";

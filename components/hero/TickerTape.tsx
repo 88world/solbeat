@@ -25,15 +25,32 @@ export function TickerTape({
   speedMs?: number;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const setRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<{ pause: () => void; play: () => void } | null>(null);
 
   useEffect(() => {
     const track = trackRef.current;
-    if (!track || tokens.length === 0) return;
+    const oneSet = setRef.current;
+    if (!track || !oneSet || tokens.length === 0) return;
 
-    // anime.js v4 returns a controllable instance.
+    // Measure ONE set's actual width including the trailing gap, then
+    // translate by exactly that. -50% only works if both halves render
+    // identically including their bordering whitespace, which they don't
+    // when the track has padding or the LIVE pip eats real space. Measuring
+    // the rendered width sidesteps the seam-mismatch problem entirely.
+    let setWidth = oneSet.getBoundingClientRect().width;
+
+    // Re-measure on resize so the loop continues to land cleanly.
+    const ro = new ResizeObserver(() => {
+      setWidth = oneSet.getBoundingClientRect().width;
+    });
+    ro.observe(oneSet);
+
     const a = animate(track, {
-      translateX: ["0%", "-50%"],
+      // anime.js accepts pixel translations directly. Going from 0 to
+      // -setWidth means the second set lands EXACTLY where the first
+      // started, then we loop and continue.
+      translateX: () => [`0px`, `${-setWidth}px`],
       duration: speedMs,
       ease: "linear",
       loop: true,
@@ -45,13 +62,11 @@ export function TickerTape({
 
     return () => {
       a.pause();
+      ro.disconnect();
     };
   }, [tokens.length, speedMs]);
 
   if (tokens.length === 0) return null;
-
-  // Duplicate the list so the seam is invisible during the loop.
-  const doubled = [...tokens, ...tokens];
 
   return (
     <div
@@ -110,14 +125,26 @@ export function TickerTape({
         </span>
       </div>
 
+      {/* Track holds two side-by-side identical sets. Each set is its own
+          flex container so we can measure ONE set's width precisely (via
+          setRef) and translate the track by that exact pixel amount —
+          guarantees a seamless loop regardless of font metrics, image
+          load timing, or container padding. */}
       <div
         ref={trackRef}
-        className="flex items-center gap-6 py-3 pl-32 pr-6"
+        className="flex items-center py-3 pl-32"
         style={{ width: "fit-content", willChange: "transform" }}
       >
-        {doubled.map((t, i) => (
-          <TickerItem key={`${t.ca}-${i}`} token={t} />
-        ))}
+        <div ref={setRef} className="flex items-center gap-6 pr-6">
+          {tokens.map((t) => (
+            <TickerItem key={`a-${t.ca}`} token={t} />
+          ))}
+        </div>
+        <div className="flex items-center gap-6 pr-6">
+          {tokens.map((t) => (
+            <TickerItem key={`b-${t.ca}`} token={t} />
+          ))}
+        </div>
       </div>
     </div>
   );

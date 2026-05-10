@@ -52,7 +52,11 @@ export function LiveFlow({ tokens, size = 380, heat = 0.2 }: Props) {
     camera.position.z = 1;
 
     // Particle pool. Pre-allocate to avoid GC churn during high flow.
-    const MAX_PARTICLES = 1200;
+    // Lowered 1200 → 600 after a perf review, mid-tier laptops were
+    // dropping frames around the high-flow tail. The visual fidelity
+    // doesn't change at this density because additive blending saturates
+    // the lanes around 60-80 alive particles anyway.
+    const MAX_PARTICLES = 600;
     const positions = new Float32Array(MAX_PARTICLES * 3);
     const colors = new Float32Array(MAX_PARTICLES * 3);
     const sizes = new Float32Array(MAX_PARTICLES);

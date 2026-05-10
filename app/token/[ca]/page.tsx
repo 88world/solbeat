@@ -16,7 +16,12 @@ import { EntranceStagger } from "@/components/shared/EntranceStagger";
 import { TokenHeader } from "@/components/token/TokenHeader";
 import { BuySellPressure } from "@/components/token/BuySellPressure";
 import { BondingCurveCard } from "@/components/token/BondingCurveCard";
-import { CandlestickChart } from "@/components/token/CandlestickChart";
+// CandlestickChart pulls in lightweight-charts (~150KB). The component is
+// loaded through a thin client-component wrapper so we can use
+// `next/dynamic` with `ssr: false` (not allowed directly in this server
+// page). The wrapper code-splits the chart out of the initial token-page
+// JS payload.
+import { CandlestickChartLazy } from "@/components/token/CandlestickChartLazy";
 import { PriceCard } from "@/components/token/PriceCard";
 import { AISynthesis } from "@/components/token/AISynthesis";
 import { RiskScoreCard } from "@/components/token/RiskScoreCard";
@@ -196,7 +201,7 @@ export default async function TokenPage({ params }: PageProps) {
               page without one. TradingView's lightweight-charts powered
               by GeckoTerminal's free OHLCV. */}
           <div data-stagger-child className="mb-5" style={{ opacity: 0 }}>
-            <CandlestickChart ca={ca} />
+            <CandlestickChartLazy ca={ca} />
           </div>
 
           {/* Row 2: AI Synthesis full-width. The narrative read, wide

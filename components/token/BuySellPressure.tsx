@@ -98,7 +98,13 @@ export function BuySellPressure({ analysis }: Props) {
     <div className="glass rounded-2xl p-5 sm:p-6 h-full flex flex-col">
       <Header tab={tab} setTab={setTab} hasData />
 
-      <Verdict net={stats.net} buyPct={stats.buyPct} sellPct={stats.sellPct} />
+      <Verdict
+        net={stats.net}
+        buyPct={stats.buyPct}
+        sellPct={stats.sellPct}
+        thinSample={stats.thinSample}
+        totalTxns={stats.buys + stats.sells}
+      />
 
       <PressureBar
         buyPct={stats.buyPct}
@@ -107,20 +113,59 @@ export function BuySellPressure({ analysis }: Props) {
         sellDollars={stats.sellDollars}
       />
 
-      <div className="grid grid-cols-2 gap-3 mt-4 text-[12px]">
-        <SideStats
+      {/* Compact stats row instead of two big tiles — saves vertical
+          space the user flagged as wasted. Buy count + sell count + the
+          implied $ split, all on one line. The "≈" marks make it clear
+          the dollar amounts are projected from txn count × volume. */}
+      <div className="grid grid-cols-2 gap-3 mt-3 text-[12px]">
+        <CompactStat
           label="Buys"
           color="#0a8f57"
           count={stats.buys}
           dollars={stats.buyDollars}
         />
-        <SideStats
+        <CompactStat
           label="Sells"
           color="#c1374a"
           count={stats.sells}
           dollars={stats.sellDollars}
         />
       </div>
+    </div>
+  );
+}
+
+function CompactStat({
+  label,
+  color,
+  count,
+  dollars,
+}: {
+  label: string;
+  color: string;
+  count: number;
+  dollars: number;
+}) {
+  return (
+    <div
+      className="flex items-baseline gap-2 rounded-lg px-3 py-2"
+      style={{ background: `${color}0F` }}
+    >
+      <span
+        className="text-[9.5px] uppercase tracking-[0.18em] font-bold shrink-0"
+        style={{ color }}
+      >
+        {label}
+      </span>
+      <span
+        className="text-[14px] font-mono font-bold tabular-nums"
+        style={{ color }}
+      >
+        {count.toLocaleString("en-US")}
+      </span>
+      <span className="text-[10px] text-text-muted text-mono ml-auto">
+        ≈ ${humanizeNumber(dollars)}
+      </span>
     </div>
   );
 }
@@ -169,15 +214,25 @@ function Verdict({
   net,
   buyPct,
   sellPct,
+  thinSample,
+  totalTxns,
 }: {
   net: number;
   buyPct: number;
   sellPct: number;
+  thinSample: boolean;
+  totalTxns: number;
 }) {
-  const { text, color } = composeVerdict(net, buyPct, sellPct);
+  const { text, color } = composeVerdict(
+    net,
+    buyPct,
+    sellPct,
+    thinSample,
+    totalTxns,
+  );
   return (
     <p
-      className="text-[14px] sm:text-[15px] font-semibold leading-snug mb-3"
+      className="text-[13.5px] sm:text-[14.5px] font-semibold leading-snug mb-3"
       style={{ color }}
     >
       {text}
@@ -258,38 +313,6 @@ function PressureBar({
   );
 }
 
-function SideStats({
-  label,
-  color,
-  count,
-  dollars,
-}: {
-  label: string;
-  color: string;
-  count: number;
-  dollars: number;
-}) {
-  return (
-    <div className="rounded-lg px-3 py-2" style={{ background: `${color}0F` }}>
-      <div
-        className="text-[9.5px] uppercase tracking-[0.18em] font-bold"
-        style={{ color }}
-      >
-        {label}
-      </div>
-      <div
-        className="text-[16px] font-mono font-bold tabular-nums leading-tight mt-0.5"
-        style={{ color }}
-      >
-        {count.toLocaleString("en-US")}
-      </div>
-      <div className="text-[10.5px] text-text-muted text-mono mt-0.5">
-        ${humanizeNumber(dollars)}
-      </div>
-    </div>
-  );
-}
-
 function computeStats(
   m: LiveMarket,
   tab: "5m" | "1h" | "6h" | "24h",
@@ -301,6 +324,9 @@ function computeStats(
   buyPct: number;
   sellPct: number;
   net: number;
+  totalVolume: number;
+  /** True when txn count is too low to draw a real conclusion. */
+  thinSample: boolean;
 } | null {
   const txns =
     tab === "5m"
@@ -325,9 +351,17 @@ function computeStats(
   const buyPct = buyShare * 100;
   const sellPct = 100 - buyPct;
   const vol = volume ?? 0;
-  // Dollar split is approximate, DexScreener doesn't expose buy$/sell$ directly.
+  // Dollar split is APPROXIMATE — DexScreener exposes count not amount,
+  // so we project: buy$ = volume × (buys / total). Real avg-buy-$ vs
+  // avg-sell-$ aren't always equal (whales exit big in single sells,
+  // retail buys small repeatedly), but the share is the right shape.
+  // This is flagged as "≈" in the UI so users know it's projected.
   const buyDollars = vol * buyShare;
   const sellDollars = vol - buyDollars;
+  // Thin-sample threshold: scale by timeframe so 24h needs more txns
+  // than 5m before a verdict is statistically meaningful.
+  const thinThreshold =
+    tab === "5m" ? 5 : tab === "1h" ? 20 : tab === "6h" ? 60 : 100;
   return {
     buys: txns.buys,
     sells: txns.sells,
@@ -336,6 +370,8 @@ function computeStats(
     buyPct,
     sellPct,
     net: buyPct - sellPct,
+    totalVolume: vol,
+    thinSample: total < thinThreshold,
   };
 }
 
@@ -343,28 +379,39 @@ function composeVerdict(
   net: number,
   buyPct: number,
   sellPct: number,
+  thinSample: boolean,
+  totalTxns: number,
 ): { text: string; color: string } {
+  // Thin-sample = too few trades to call it. Don't say "100% selling"
+  // when there were 7 sells and 0 buys in a quiet hour, that's just
+  // noise. Show the count and let the user decide.
+  if (thinSample) {
+    return {
+      text: `Quiet window. ${totalTxns} txn${totalTxns === 1 ? "" : "s"} this period — too thin to read.`,
+      color: "#5a5a70",
+    };
+  }
   if (net > 30) {
     return {
-      text: `Heavy buying. ${buyPct.toFixed(0)}% of orders are buys.`,
+      text: `Heavy buying. ${buyPct.toFixed(0)}% of trades are buys.`,
       color: "#0a8f57",
     };
   }
   if (net > 10) {
     return {
-      text: `Buyers in control. ${buyPct.toFixed(0)}% buys vs ${sellPct.toFixed(0)}% sells.`,
+      text: `Buyers in control. ${buyPct.toFixed(0)}% buys / ${sellPct.toFixed(0)}% sells.`,
       color: "#0a6f47",
     };
   }
   if (net < -30) {
     return {
-      text: `Heavy selling. ${sellPct.toFixed(0)}% of orders are sells.`,
+      text: `Heavy selling. ${sellPct.toFixed(0)}% of trades are sells.`,
       color: "#c1374a",
     };
   }
   if (net < -10) {
     return {
-      text: `Sellers in control. ${sellPct.toFixed(0)}% sells vs ${buyPct.toFixed(0)}% buys.`,
+      text: `Sellers in control. ${sellPct.toFixed(0)}% sells / ${buyPct.toFixed(0)}% buys.`,
       color: "#d6601a",
     };
   }
