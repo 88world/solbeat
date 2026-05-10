@@ -157,22 +157,51 @@ export default async function TokenPage({ params }: PageProps) {
           ← Back
         </Link>
 
-        <div className="mb-8">
+        <div className="mb-7">
           <TokenHeader analysis={fastAnalysis} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-5 lg:gap-7">
-          <div className="space-y-5">
-            <PriceCard analysis={fastAnalysis} />
-            <BubbleMap ca={fast.metadata.ca} />
-            <HolderList holders={fast.holders} ca={fast.metadata.ca} />
-          </div>
+        {/* Row 1: PriceCard (left, fast) + AI Synthesis (right, slow). The
+            "what's it priced at + what does it mean" headline. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.15fr] gap-5 lg:gap-6 mb-5">
+          <PriceCard analysis={fastAnalysis} />
+          <Suspense fallback={<SynthesisSkeleton />}>
+            <AISynthesisSlow ca={ca} fast={fast} />
+          </Suspense>
+        </div>
 
-          <div className="space-y-5">
-            <Suspense fallback={<SlowPanelsSkeleton />}>
-              <SlowPanels ca={ca} fast={fast} />
-            </Suspense>
-          </div>
+        {/* Row 2: Signal + Risk side-by-side. Both severity-tagged composite
+            views, they share visual language so reading them in parallel
+            beats stacked. */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+          <Suspense fallback={<CardSkeleton lines={4} />}>
+            <SignalSlow ca={ca} fast={fast} />
+          </Suspense>
+          <Suspense fallback={<CardSkeleton lines={6} withCircle />}>
+            <RiskSlow ca={ca} fast={fast} />
+          </Suspense>
+        </div>
+
+        {/* Row 3: BubbleMap (left, fast) + HolderList (right, fast). The
+            on-chain detail panels, both fast so no Suspense. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-5 lg:gap-6 mb-5">
+          <BubbleMap ca={fast.metadata.ca} />
+          <HolderList holders={fast.holders} ca={fast.metadata.ca} />
+        </div>
+
+        {/* Row 4: Catalysts full-width. News reads better wide than narrow. */}
+        <div className="mb-5">
+          <Suspense fallback={<CardSkeleton lines={6} />}>
+            <CatalystSlow ca={ca} fast={fast} />
+          </Suspense>
+        </div>
+
+        {/* Row 5: Recent tweets, full-width container with internal 2-col
+            grid so we get more cards visible per row. */}
+        <div className="mb-8">
+          <Suspense fallback={<CardSkeleton lines={5} />}>
+            <TweetsSlow ca={ca} fast={fast} />
+          </Suspense>
         </div>
 
         <SwapPanel analysis={fastAnalysis} />
@@ -182,11 +211,23 @@ export default async function TokenPage({ params }: PageProps) {
 }
 
 /**
- * Slow panels stream in once Twitter + Perplexity + Claude resolve. Wrapped
- * in <Suspense> at the page level so the fast slice (TokenHeader, PriceCard,
- * BubbleMap, HolderList) renders immediately and isn't blocked on AI.
+ * Cell-level Suspense components. Each one calls analyzeSlow which is cached,
+ * so the underlying network/AI work happens once even though five components
+ * await it. React resolves them as the cache populates, streaming each panel
+ * into place independently.
  */
-async function SlowPanels({ ca, fast }: { ca: string; fast: FastAnalysis }) {
+async function AISynthesisSlow({
+  ca,
+  fast,
+}: {
+  ca: string;
+  fast: FastAnalysis;
+}) {
+  const slow = await analyzeSlow(ca, fast);
+  return <AISynthesis synthesis={slow.synthesis} />;
+}
+
+async function SignalSlow({ ca, fast }: { ca: string; fast: FastAnalysis }) {
   const slow = await analyzeSlow(ca, fast);
   const merged: TokenAnalysis = {
     ...fast,
@@ -195,47 +236,81 @@ async function SlowPanels({ ca, fast }: { ca: string; fast: FastAnalysis }) {
     risk: slow.risk,
     synthesis: slow.synthesis,
   };
+  return <SignalPanel analysis={merged} />;
+}
+
+async function RiskSlow({ ca, fast }: { ca: string; fast: FastAnalysis }) {
+  const slow = await analyzeSlow(ca, fast);
+  const merged: TokenAnalysis = {
+    ...fast,
+    tweets: slow.tweets,
+    catalysts: slow.catalysts,
+    risk: slow.risk,
+    synthesis: slow.synthesis,
+  };
+  return <RiskScoreCard analysis={merged} />;
+}
+
+async function CatalystSlow({
+  ca,
+  fast,
+}: {
+  ca: string;
+  fast: FastAnalysis;
+}) {
+  const slow = await analyzeSlow(ca, fast);
+  return <CatalystFeed catalysts={slow.catalysts} />;
+}
+
+async function TweetsSlow({ ca, fast }: { ca: string; fast: FastAnalysis }) {
+  const slow = await analyzeSlow(ca, fast);
+  return <RecentTweets tweets={slow.tweets} />;
+}
+
+function SynthesisSkeleton() {
   return (
-    <>
-      <AISynthesis synthesis={slow.synthesis} />
-      <SignalPanel analysis={merged} />
-      <RiskScoreCard analysis={merged} />
-      <CatalystFeed catalysts={slow.catalysts} />
-      <RecentTweets tweets={slow.tweets} />
-    </>
+    <div className="glass rounded-2xl p-5 sm:p-6 animate-shimmer">
+      <div className="h-3 w-20 rounded bg-text-muted/10 mb-4" />
+      <div className="space-y-2">
+        <div className="h-3 w-full rounded bg-text-muted/8" />
+        <div className="h-3 w-5/6 rounded bg-text-muted/8" />
+        <div className="h-3 w-4/6 rounded bg-text-muted/8" />
+        <div className="h-3 w-5/6 rounded bg-text-muted/8" />
+      </div>
+    </div>
   );
 }
 
-function SlowPanelsSkeleton() {
+function CardSkeleton({
+  lines = 4,
+  withCircle = false,
+}: {
+  lines?: number;
+  withCircle?: boolean;
+}) {
   return (
-    <>
-      <div className="glass rounded-2xl p-5 sm:p-6 animate-shimmer">
-        <div className="h-3 w-20 rounded bg-text-muted/10 mb-4" />
-        <div className="space-y-2">
-          <div className="h-3 w-full rounded bg-text-muted/8" />
-          <div className="h-3 w-5/6 rounded bg-text-muted/8" />
-          <div className="h-3 w-4/6 rounded bg-text-muted/8" />
-        </div>
-      </div>
-      <div className="glass rounded-2xl p-5 sm:p-6 animate-shimmer">
-        <div className="h-3 w-16 rounded bg-text-muted/10 mb-4" />
-        <div className="h-4 w-3/4 rounded bg-text-muted/10 mb-3" />
-        <div className="flex gap-2 flex-wrap">
-          <div className="h-6 w-24 rounded-full bg-text-muted/8" />
-          <div className="h-6 w-28 rounded-full bg-text-muted/8" />
-          <div className="h-6 w-20 rounded-full bg-text-muted/8" />
-        </div>
-      </div>
-      <div className="glass rounded-2xl p-5 sm:p-6 animate-shimmer">
-        <div className="flex items-center gap-5">
-          <div className="size-24 rounded-full bg-text-muted/10" />
+    <div className="glass rounded-2xl p-5 sm:p-6 animate-shimmer">
+      {withCircle ? (
+        <div className="flex items-center gap-5 mb-4">
+          <div className="size-24 rounded-full bg-text-muted/10 shrink-0" />
           <div className="flex-1 space-y-2">
             <div className="h-3 w-20 rounded bg-text-muted/10" />
             <div className="h-3 w-full rounded bg-text-muted/8" />
           </div>
         </div>
+      ) : (
+        <div className="h-3 w-20 rounded bg-text-muted/10 mb-4" />
+      )}
+      <div className="space-y-2.5">
+        {Array.from({ length: lines }).map((_, i) => (
+          <div
+            key={i}
+            className="h-3 rounded bg-text-muted/8"
+            style={{ width: `${88 - i * 8}%` }}
+          />
+        ))}
       </div>
-    </>
+    </div>
   );
 }
 
