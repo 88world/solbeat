@@ -11,6 +11,7 @@ import { CatalystFeed } from "@/components/token/CatalystFeed";
 import { RecentTweets } from "@/components/token/RecentTweets";
 import { HolderList } from "@/components/token/HolderList";
 import { BubbleMap } from "@/components/token/BubbleMap";
+import { SignalPanel } from "@/components/token/SignalPanel";
 import { SwapPanel } from "@/components/token/SwapPanel";
 import { shortAddress } from "@/lib/utils";
 
@@ -150,6 +151,7 @@ export default async function TokenPage({ params }: PageProps) {
 
           <div className="space-y-5">
             <AISynthesis synthesis={analysis.synthesis} />
+            <SignalPanel analysis={analysis} />
             <RiskScoreCard risk={analysis.risk} />
             <CatalystFeed catalysts={analysis.catalysts} />
             <RecentTweets tweets={analysis.tweets} />

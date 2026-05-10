@@ -53,14 +53,36 @@ export async function generateRiskScore(
 }
 
 function parseRisk(raw: string): RiskScore | null {
-  const cleaned = raw.trim().replace(/^```json\s*/i, "").replace(/^```/i, "").replace(/```$/i, "");
+  const jsonStr = extractFirstJsonObject(raw);
+  if (!jsonStr) return null;
   try {
-    const obj = JSON.parse(cleaned) as RiskScore;
+    const obj = JSON.parse(jsonStr) as RiskScore;
     if (typeof obj.score !== "number") return null;
     return obj;
   } catch {
     return null;
   }
+}
+
+function extractFirstJsonObject(raw: string): string | null {
+  const start = raw.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+  for (let i = start; i < raw.length; i++) {
+    const ch = raw[i];
+    if (escapeNext) { escapeNext = false; continue; }
+    if (ch === "\\") { escapeNext = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return raw.slice(start, i + 1);
+    }
+  }
+  return null;
 }
 
 export function computeHeuristicRisk(

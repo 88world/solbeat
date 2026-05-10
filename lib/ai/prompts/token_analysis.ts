@@ -79,40 +79,74 @@ export async function generateTokenSynthesis(
   const text = await runClaude({
     system: TOKEN_ANALYSIS_SYSTEM,
     user: `Analyze this Solana token:\n\n${JSON.stringify(compactPayload, null, 2)}\n\nReturn only the JSON object.`,
-    maxTokens: 900,
+    maxTokens: 1200,
     temperature: 0.3,
   });
 
-  if (!text) return null;
-  return parseSynthesis(text);
+  if (!text) {
+    console.error("[synthesis] runClaude returned null");
+    return null;
+  }
+  const result = parseSynthesis(text);
+  if (!result) {
+    console.error("[synthesis] parse failed. raw response:", text.slice(0, 500));
+  }
+  return result;
 }
 
+/**
+ * Robust JSON extraction from a Claude response. Handles ```json fences,
+ * leading prose ("Here's the analysis:"), trailing commentary, and stray
+ * whitespace. Walks the string to find the first {…} object with proper
+ * brace tracking (quote-aware) so braces inside string values don't confuse
+ * it.
+ */
 function parseSynthesis(raw: string): TokenSynthesis | null {
-  const cleaned = raw
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "");
+  const jsonStr = extractFirstJsonObject(raw);
+  if (!jsonStr) return null;
   try {
-    const obj = JSON.parse(cleaned) as Partial<TokenSynthesis>;
-    if (!obj.what_this_is || !obj.whats_happening || !obj.what_to_know) return null;
+    const obj = JSON.parse(jsonStr) as Partial<TokenSynthesis>;
+    if (!obj.what_this_is || !obj.whats_happening || !obj.what_to_know) {
+      return null;
+    }
     return {
       what_this_is: obj.what_this_is,
       whats_happening: obj.whats_happening,
       what_to_know: obj.what_to_know,
     };
   } catch {
-    // Try to extract by pattern as a fallback.
-    const m1 = raw.match(/"what_this_is"\s*:\s*"([^"]+)"/);
-    const m2 = raw.match(/"whats_happening"\s*:\s*"([^"]+)"/);
-    const m3 = raw.match(/"what_to_know"\s*:\s*"([^"]+)"/);
-    if (m1 && m2 && m3) {
-      return {
-        what_this_is: m1[1],
-        whats_happening: m2[1],
-        what_to_know: m3[1],
-      };
-    }
     return null;
   }
+}
+
+export function extractFirstJsonObject(raw: string): string | null {
+  const start = raw.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+  for (let i = start; i < raw.length; i++) {
+    const ch = raw[i];
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escapeNext = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        return raw.slice(start, i + 1);
+      }
+    }
+  }
+  return null;
 }
