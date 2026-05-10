@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 import { animate } from "animejs";
 import type { TokenAnalysis, TokenMarket } from "@/types/token";
-import { humanizeNumber, humanizePrice, pctChange } from "@/lib/utils";
+import { humanizeNumber, humanizePrice } from "@/lib/utils";
 
 type LivePoll = {
   price_usd: number | null;
@@ -126,7 +126,8 @@ export function PriceCard({ analysis }: { analysis: TokenAnalysis }) {
               positive ? "text-signal-positive" : "text-signal-negative"
             }`}
           >
-            {pctChange(change24)} <span className="text-text-muted text-[12px]">24h</span>
+            <PctCountUp value={change24} />
+            <span className="text-text-muted text-[12px] ml-1">24h</span>
           </div>
         )}
       </div>
@@ -146,22 +147,28 @@ export function PriceCard({ analysis }: { analysis: TokenAnalysis }) {
         }}
       />
 
-      <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-4 text-[12px]">
-        <Stat
+      <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[12px]">
+        <PremiumStat
           label="Market cap"
-          value={
-            m.market_cap != null
-              ? `$${humanizeNumber(m.market_cap)}`
-              : m.fdv != null
-                ? `$${humanizeNumber(m.fdv)}`
-                : "-"
-          }
+          numeric={m.market_cap ?? m.fdv ?? null}
+          format={(n) => `$${humanizeNumber(n)}`}
         />
-        <Stat label="24h volume" value={m.volume_24h != null ? `$${humanizeNumber(m.volume_24h)}` : "-"} />
-        <Stat label="Liquidity" value={m.liquidity_usd != null ? `$${humanizeNumber(m.liquidity_usd)}` : "-"} />
-        <Stat
+        <PremiumStat
+          label="24h volume"
+          numeric={m.volume_24h ?? null}
+          format={(n) => `$${humanizeNumber(n)}`}
+        />
+        <PremiumStat
+          label="Liquidity"
+          numeric={m.liquidity_usd ?? null}
+          format={(n) => `$${humanizeNumber(n)}`}
+        />
+        <PremiumStat
           label="Pool age"
-          value={m.pair_age_hours != null ? formatAge(m.pair_age_hours) : "-"}
+          numeric={m.pair_age_hours ?? null}
+          format={(h) => formatAge(h)}
+          // Pool age never flashes — it monotonically increases by minutes.
+          neverFlash
         />
       </div>
     </div>
@@ -383,11 +390,135 @@ function buildSparkline(
   return points;
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+/**
+ * 24h %-change with the same smooth tween treatment as the price digits.
+ * Sign + suffix stay rendered as plain text, only the magnitude tweens so
+ * the +/- arrow doesn't flicker. Color is set by the parent.
+ */
+function PctCountUp({ value }: { value: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const lastRef = useRef(value);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (!Number.isFinite(value)) return;
+    const start = lastRef.current;
+    if (start === value) {
+      ref.current.textContent = formatPct(value);
+      return;
+    }
+    const obj = { v: start };
+    const a = animate(obj, {
+      v: value,
+      duration: 520,
+      ease: "out(3)",
+      onUpdate: () => {
+        if (ref.current) ref.current.textContent = formatPct(obj.v);
+      },
+    });
+    lastRef.current = value;
+    return () => {
+      a.pause();
+    };
+  }, [value]);
+
+  return <span ref={ref}>{formatPct(value)}</span>;
+}
+
+function formatPct(v: number): string {
+  const sign = v >= 0 ? "+" : "";
+  return `${sign}${v.toFixed(Math.abs(v) >= 100 ? 0 : 2)}%`;
+}
+
+/**
+ * Premium replacement for the old plain-text Stat tile. Each tile has:
+ *   - microscale label in uppercase / wide tracking, BV brand small caps
+ *   - tabular-num value that tweens between polls (so $1.32M → $1.35M
+ *     ticks visibly instead of snapping)
+ *   - a soft border + 1px inset shadow so the tile reads as a discrete
+ *     surface, not just text-on-glass
+ *   - a brief green/blue flash on the value when it changes, so the eye
+ *     catches a refresh without staring
+ */
+function PremiumStat({
+  label,
+  numeric,
+  format,
+  neverFlash,
+}: {
+  label: string;
+  numeric: number | null;
+  format: (n: number) => string;
+  neverFlash?: boolean;
+}) {
+  const valueRef = useRef<HTMLDivElement>(null);
+  const lastDisplayedRef = useRef<number | null>(numeric);
+
+  useEffect(() => {
+    if (!valueRef.current) return;
+    if (numeric == null || !Number.isFinite(numeric)) {
+      valueRef.current.textContent = "-";
+      lastDisplayedRef.current = null;
+      return;
+    }
+    const start = lastDisplayedRef.current;
+    if (start == null || start === numeric) {
+      valueRef.current.textContent = format(numeric);
+      lastDisplayedRef.current = numeric;
+      return;
+    }
+    // Tween the value through the format function.
+    const obj = { v: start };
+    const a = animate(obj, {
+      v: numeric,
+      duration: 700,
+      ease: "out(3)",
+      onUpdate: () => {
+        if (valueRef.current) valueRef.current.textContent = format(obj.v);
+      },
+    });
+    lastDisplayedRef.current = numeric;
+    // Flash the tile color briefly to draw the eye.
+    if (!neverFlash) {
+      const tile = valueRef.current.parentElement;
+      if (tile) {
+        const up = numeric >= start;
+        const color = up ? "rgba(20, 241, 149, 0.35)" : "rgba(255, 45, 156, 0.35)";
+        animate(tile, {
+          boxShadow: [
+            "inset 0 0 0 1px rgba(10, 10, 30, 0.06), 0 0 0 0 rgba(0,0,0,0)",
+            `inset 0 0 0 1px ${color}, 0 0 18px ${color}`,
+            "inset 0 0 0 1px rgba(10, 10, 30, 0.06), 0 0 0 0 rgba(0,0,0,0)",
+          ],
+          duration: 1100,
+          ease: "out(3)",
+        });
+      }
+    }
+    return () => {
+      a.pause();
+    };
+  }, [numeric, format, neverFlash]);
+
   return (
-    <div>
-      <div className="text-text-muted text-[11px] uppercase tracking-wider">{label}</div>
-      <div className="text-text-primary text-[14px] text-mono mt-1">{value}</div>
+    <div
+      className="rounded-xl px-3 py-2.5 relative overflow-hidden"
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0))",
+        boxShadow: "inset 0 0 0 1px rgba(10, 10, 30, 0.06)",
+        transition: "box-shadow 250ms ease",
+      }}
+    >
+      <div className="text-text-muted text-[9.5px] uppercase tracking-[0.18em] font-bold">
+        {label}
+      </div>
+      <div
+        ref={valueRef}
+        className="text-text-primary text-[14px] font-mono tabular-nums mt-1 font-semibold"
+      >
+        {numeric != null ? format(numeric) : "-"}
+      </div>
     </div>
   );
 }

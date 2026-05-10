@@ -84,23 +84,34 @@ export function EcosystemStrip() {
  * we mirror it into the DOM via a ref. 1.4s outExpo feels punchy without
  * rolling forever. When `value` changes, restart from current displayed
  * value so updates feel like the number "ticking up" instead of resetting.
+ *
+ * When the value changes by more than ~0.05% (real movement, not float
+ * noise), briefly flash the span's text color so the eye catches the
+ * refresh. Direction-aware: green flash for up, pink flash for down.
  */
 function CountUp({
   value,
   format,
   duration = 1400,
+  glow,
 }: {
   value: number;
   format: (n: number) => string;
   duration?: number;
+  /** Direction-aware glow color override (e.g., "#14F195" or "#FF2D9C").
+   *  When omitted, we infer up = green, down = pink. */
+  glow?: { up: string; down: string };
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const lastDisplayedRef = useRef(0);
+  const firstRenderRef = useRef(true);
 
   useEffect(() => {
     if (!ref.current || !Number.isFinite(value)) return;
     const target = value;
     const start = lastDisplayedRef.current;
+    const isFirst = firstRenderRef.current;
+    firstRenderRef.current = false;
     const obj = { v: start };
     const a = animate(obj, {
       v: target,
@@ -111,12 +122,34 @@ function CountUp({
         lastDisplayedRef.current = obj.v;
       },
     });
+    // Glow flash on updates after the first render. Magnitude-gated so a
+    // tiny float drift doesn't pop the glow constantly.
+    if (!isFirst && start !== 0) {
+      const pctChange = Math.abs((target - start) / start);
+      if (pctChange > 0.0005) {
+        const up = target > start;
+        const palette = glow ?? { up: "#14F195", down: "#FF2D9C" };
+        const color = up ? palette.up : palette.down;
+        const el = ref.current;
+        if (el) {
+          animate(el, {
+            textShadow: [
+              "0 0 0px rgba(0,0,0,0)",
+              `0 0 16px ${color}aa, 0 0 4px ${color}88`,
+              "0 0 0px rgba(0,0,0,0)",
+            ],
+            duration: 900,
+            ease: "out(3)",
+          });
+        }
+      }
+    }
     return () => {
       a.pause();
     };
-  }, [value, format, duration]);
+  }, [value, format, duration, glow]);
 
-  return <span ref={ref}>{format(0)}</span>;
+  return <span ref={ref} style={{ display: "inline-block" }}>{format(0)}</span>;
 }
 
 function CardShell({

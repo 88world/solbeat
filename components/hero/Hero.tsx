@@ -133,16 +133,33 @@ export function Hero() {
           className="flex flex-col items-center text-center gap-3 lg:gap-4"
           data-fade-up
         >
-          <h1 className="font-extrabold tracking-[-0.04em] leading-[0.98] text-text-primary text-[clamp(2rem,4.2vw,3.4rem)]">
-            The pulse{" "}
+          <h1 className="relative font-extrabold tracking-[-0.04em] leading-[0.98] text-text-primary text-[clamp(2rem,4.2vw,3.4rem)]">
+            {/* Soft pink/blue glow behind the headline, only visible on
+                desktop where there's vertical room. Pinned by the live
+                heat so it intensifies when the market is hot — the
+                background pulses with the data. */}
             <span
-              className="inline-block bg-clip-text text-transparent text-shimmer pb-1"
+              aria-hidden
+              className="hidden lg:block absolute left-1/2 -translate-x-1/2 -top-8 w-[640px] h-[180px] pointer-events-none"
               style={{
-                backgroundImage:
-                  "linear-gradient(110deg, #FF2D9C 0%, #5E5CFF 35%, #14F195 70%, #FF2D9C 100%)",
+                background:
+                  "radial-gradient(ellipse at center, rgba(255,45,156,0.18) 0%, rgba(94,92,255,0.10) 35%, transparent 70%)",
+                filter: "blur(20px)",
+                opacity: 0.45 + Math.min(1, heat) * 0.4,
+                transition: "opacity 700ms ease",
               }}
-            >
-              of Solana.
+            />
+            <span className="relative">
+              The pulse{" "}
+              <span
+                className="inline-block bg-clip-text text-transparent text-shimmer pb-1"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(110deg, #FF2D9C 0%, #5E5CFF 35%, #14F195 70%, #FF2D9C 100%)",
+                }}
+              >
+                of Solana.
+              </span>
             </span>
           </h1>
           <div className="w-full max-w-lg">

@@ -156,8 +156,30 @@ function TrendingRow({
   const symbol = (token.symbol ?? "").replace(/^\$/, "").toUpperCase();
   const change = token.price_change_24h ?? 0;
   const positive = change >= 0;
+  // Glow halo on the freshly-rotated top row. Fades over 1.4s after the
+  // row is mounted (i.e., right after AnimatePresence finishes its enter
+  // transition). The eye catches "something just changed" without us
+  // having to draw an explicit "new!" label.
+  const rowRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    if (!fresh) return;
+    const el = rowRef.current;
+    if (!el) return;
+    const halo = positive ? "#14F195" : "#FF2D9C";
+    animate(el, {
+      boxShadow: [
+        "0 1px 0 rgba(255,255,255,0.5) inset, 0 6px 20px rgba(10, 10, 30, 0.04)",
+        `0 1px 0 rgba(255,255,255,0.5) inset, 0 0 0 1px ${halo}55, 0 6px 26px ${halo}55`,
+        "0 1px 0 rgba(255,255,255,0.5) inset, 0 6px 20px rgba(10, 10, 30, 0.04)",
+      ],
+      duration: 1500,
+      ease: "out(3)",
+    });
+  }, [fresh, positive, token.ca]);
+
   return (
     <Link
+      ref={rowRef}
       href={`/token/${token.ca}`}
       className="group relative flex items-center justify-between gap-3 px-3.5 py-3 rounded-2xl border border-border-subtle bg-bg-elevated/55 backdrop-blur-md hover:bg-bg-elevated/85 hover:border-border-emphasized hover:-translate-y-0.5 transition-all duration-300 overflow-hidden"
       style={{

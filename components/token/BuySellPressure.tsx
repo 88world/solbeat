@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { animate } from "animejs";
 import type { TokenAnalysis, TokenMarket } from "@/types/token";
 import { humanizeNumber } from "@/lib/utils";
+
+/** Rolling history of buy% per tab, used for the micro-trend sparkline. */
+const HISTORY_LIMIT = 24;
 
 type Props = {
   analysis: TokenAnalysis;
@@ -45,6 +48,18 @@ type LiveMarket = Pick<
 export function BuySellPressure({ analysis }: Props) {
   const [tab, setTab] = useState<"5m" | "1h" | "6h" | "24h">("1h");
   const [live, setLive] = useState<LiveMarket | null>(null);
+  // Per-tab rolling history of buy% so the user sees the *trajectory* of
+  // pressure across the last ~3min of polling, not just the latest snap.
+  // Kept in a ref to avoid re-rendering on every poll; we mirror an
+  // observable counter into state so the sparkline component picks up
+  // updates without ref-reads in the render path.
+  const historyRef = useRef<Record<"5m" | "1h" | "6h" | "24h", number[]>>({
+    "5m": [],
+    "1h": [],
+    "6h": [],
+    "24h": [],
+  });
+  const [historyTick, setHistoryTick] = useState(0);
 
   // Poll the quick endpoint on the same 8s cadence as the rest of the page.
   useEffect(() => {
@@ -87,6 +102,19 @@ export function BuySellPressure({ analysis }: Props) {
   // raw count means very different things at different scales.
   const stats = computeStats(m, tab, analysis.market.market_cap ?? null);
 
+  // Push the latest buy% into the per-tab history buffer. We do this in
+  // an effect (not the render path) so the React purity rule is happy and
+  // so the buffer doesn't double-push on strict-mode double renders.
+  useEffect(() => {
+    if (!stats) return;
+    const buf = historyRef.current[tab];
+    const last = buf[buf.length - 1];
+    if (last === stats.buyPct) return; // no new data, skip
+    buf.push(stats.buyPct);
+    if (buf.length > HISTORY_LIMIT) buf.shift();
+    setHistoryTick((t) => t + 1);
+  }, [stats?.buyPct, tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!stats) {
     return (
       <div className="glass rounded-2xl p-5 sm:p-6 h-full flex flex-col">
@@ -109,6 +137,8 @@ export function BuySellPressure({ analysis }: Props) {
         thinSample={stats.thinSample}
         totalTxns={stats.buys + stats.sells}
       />
+
+      <BuyPctTrend history={historyRef.current[tab]} tick={historyTick} />
 
       <PressureBar
         buyPct={stats.buyPct}
@@ -241,6 +271,119 @@ function Verdict({
     >
       {text}
     </p>
+  );
+}
+
+/**
+ * Tiny SVG sparkline of buy% over the rolling history window. Visualizes
+ * the *trajectory* of buying pressure, not just the current snap: a
+ * 60% buy% reading reads very differently if it's been climbing from 50%
+ * (momentum building) vs falling from 80% (top is in).
+ *
+ * Zero line at 50% (perfectly balanced) is drawn so the user reads
+ * "above/below balance" without doing math. Y-axis is locked to 0..100
+ * — fixed range matters because we want absolute pressure to read at a
+ * glance, not auto-scaled to local extrema.
+ */
+function BuyPctTrend({
+  history,
+  tick,
+}: {
+  history: number[];
+  /** Re-renders the spark when new data arrives; the ref array itself
+   *  doesn't trigger re-render so we pass a tick counter. */
+  tick: number;
+}) {
+  const path = useMemo(() => {
+    if (history.length < 2) return { line: "", area: "" };
+    const w = 320;
+    const h = 28;
+    const x = (i: number) => (i / (history.length - 1)) * w;
+    const y = (p: number) => h - (p / 100) * h;
+    const line = history
+      .map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(2)},${y(p).toFixed(2)}`)
+      .join(" ");
+    const area = `${line} L${w},${h} L0,${h} Z`;
+    return { line, area };
+  }, [history, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (history.length < 2) {
+    return (
+      <div className="flex items-center justify-between text-[9.5px] uppercase tracking-[0.18em] text-text-muted font-bold mb-2">
+        <span>buy% trend</span>
+        <span className="opacity-60 normal-case tracking-normal">
+          collecting samples…
+        </span>
+      </div>
+    );
+  }
+
+  const last = history[history.length - 1];
+  const first = history[0];
+  const delta = last - first;
+  const direction = delta > 1 ? "climbing" : delta < -1 ? "falling" : "flat";
+  const arrow = direction === "climbing" ? "↑" : direction === "falling" ? "↓" : "→";
+  const dirColor =
+    direction === "climbing"
+      ? "#0a8f57"
+      : direction === "falling"
+        ? "#c1374a"
+        : "#5a5a70";
+
+  return (
+    <div className="mb-2">
+      <div className="flex items-baseline justify-between mb-1">
+        <span className="text-[9.5px] uppercase tracking-[0.18em] text-text-muted font-bold">
+          buy% trend · last {history.length}
+        </span>
+        <span
+          className="text-[10px] font-bold font-mono tabular-nums"
+          style={{ color: dirColor }}
+        >
+          {arrow} {direction}
+        </span>
+      </div>
+      <svg
+        viewBox="0 0 320 28"
+        preserveAspectRatio="none"
+        className="w-full"
+        style={{ display: "block", height: 28 }}
+        aria-hidden
+      >
+        <defs>
+          <linearGradient id="bsp-trend-grad" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#14F195" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#14F195" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {/* 50% reference line (perfect balance). */}
+        <line
+          x1="0"
+          x2="320"
+          y1="14"
+          y2="14"
+          stroke="currentColor"
+          strokeOpacity="0.12"
+          strokeDasharray="2 3"
+        />
+        <path d={path.area} fill="url(#bsp-trend-grad)" />
+        <path
+          d={path.line}
+          fill="none"
+          stroke={dirColor}
+          strokeWidth={1.4}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Live tip dot at the last sample. */}
+        <circle
+          cx={320}
+          cy={28 - (last / 100) * 28}
+          r={2.6}
+          fill={dirColor}
+        />
+      </svg>
+    </div>
   );
 }
 
