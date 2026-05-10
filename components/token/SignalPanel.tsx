@@ -130,8 +130,14 @@ function computeSignals(a: TokenAnalysis): Signal[] {
     });
   }
 
-  // Social heat
+  // Social heat + hype-quality score (bot-vs-organic). When engagement is
+  // significant we look at the follower distribution of the authors:
+  //   - mostly sub-1k accounts amplifying the same token = coordinated/bot
+  //   - balanced/big-account presence = organic momentum
+  // This is the "are we being farmed?" check that all token analytics tools
+  // get asked for and almost none surface.
   const tweetEngagement = a.tweets.reduce((acc, t) => acc + t.engagement, 0);
+  const hype = computeHypeQuality(a.tweets);
   if (tweetEngagement > 50_000) {
     s.push({ label: "Viral on X", value: `${formatK(tweetEngagement)} engagement`, severity: "good", weight: 4 });
   } else if (tweetEngagement > 5_000) {
@@ -140,7 +146,53 @@ function computeSignals(a: TokenAnalysis): Signal[] {
     s.push({ label: "Quiet socially", value: "no recent posts", severity: "neutral", weight: 1 });
   }
 
+  if (hype) s.push(hype);
+
   return s;
+}
+
+/**
+ * Score the *quality* of social hype, not just the volume:
+ *   - >70% sub-1k follower accounts and a meaningful engagement floor → bot-coded
+ *   - any verified or 100k+ accounts in the mix → organic momentum
+ *   - everything else → mid-tier organic
+ *
+ * Need at least 5 tweets to call it; fewer is statistical noise.
+ */
+function computeHypeQuality(tweets: TokenAnalysis["tweets"]): Signal | null {
+  if (tweets.length < 5) return null;
+  const subKilo = tweets.filter((t) => t.followers < 1_000).length;
+  const subKiloPct = (subKilo / tweets.length) * 100;
+  const bigAccounts = tweets.filter(
+    (t) => t.verified || t.followers >= 100_000,
+  ).length;
+  const totalEng = tweets.reduce((acc, t) => acc + t.engagement, 0);
+
+  if (subKiloPct > 70 && totalEng > 1_000) {
+    return {
+      label: "Coordinated hype",
+      value: `${subKilo}/${tweets.length} sub-1k followers`,
+      severity: "bad",
+      weight: 6,
+    };
+  }
+  if (bigAccounts >= 2) {
+    return {
+      label: "Big accounts in",
+      value: `${bigAccounts} 100k+ posters`,
+      severity: "good",
+      weight: 4,
+    };
+  }
+  if (subKiloPct > 50) {
+    return {
+      label: "Grassroots-only",
+      value: `${subKilo}/${tweets.length} small accounts`,
+      severity: "warn",
+      weight: 2,
+    };
+  }
+  return null;
 }
 
 function composeVerdict(signals: Signal[]): { text: string; color: string } {

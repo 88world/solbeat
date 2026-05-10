@@ -5,6 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { PortfolioGrid, type HeldToken } from "./PortfolioGrid";
 import { ReclaimPanel } from "./ReclaimPanel";
+import { WalletSignalPanel } from "./WalletSignalPanel";
 import { cn, shortAddress } from "@/lib/utils";
 
 type Tab = "portfolio" | "reclaim";
@@ -88,6 +89,10 @@ export function WalletPulseClient() {
           </TabBtn>
         </div>
       </header>
+
+      {!loading && held && (
+        <WalletSignalPanel held={held} emptyCount={emptyCount} />
+      )}
 
       {tab === "portfolio" ? (
         loading ? (
