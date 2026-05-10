@@ -37,9 +37,24 @@ export async function GET(
     price_change_24h: pair.priceChange?.h24 ?? null,
     volume_5m: pair.volume?.m5 ?? null,
     volume_1h: pair.volume?.h1 ?? null,
+    volume_6h: pair.volume?.h6 ?? null,
     volume_24h: pair.volume?.h24 ?? null,
     liquidity_usd: pair.liquidity?.usd ?? null,
     market_cap: pair.marketCap ?? null,
     fdv: pair.fdv ?? null,
+    // Buy/sell counts so the BuySellPressure card can repaint without a
+    // full analyzer run.
+    txns_5m: pair.txns?.m5
+      ? { buys: pair.txns.m5.buys ?? 0, sells: pair.txns.m5.sells ?? 0 }
+      : null,
+    txns_1h: pair.txns?.h1
+      ? { buys: pair.txns.h1.buys ?? 0, sells: pair.txns.h1.sells ?? 0 }
+      : null,
+    txns_6h: pair.txns?.h6
+      ? { buys: pair.txns.h6.buys ?? 0, sells: pair.txns.h6.sells ?? 0 }
+      : null,
+    txns_24h: pair.txns?.h24
+      ? { buys: pair.txns.h24.buys ?? 0, sells: pair.txns.h24.sells ?? 0 }
+      : null,
   });
 }

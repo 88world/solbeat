@@ -14,6 +14,7 @@ import { CursorBlob } from "@/components/shared/CursorBlob";
 import { Aurora } from "@/components/shared/Aurora";
 import { EntranceStagger } from "@/components/shared/EntranceStagger";
 import { TokenHeader } from "@/components/token/TokenHeader";
+import { BuySellPressure } from "@/components/token/BuySellPressure";
 import { PriceCard } from "@/components/token/PriceCard";
 import { AISynthesis } from "@/components/token/AISynthesis";
 import { RiskScoreCard } from "@/components/token/RiskScoreCard";
@@ -178,6 +179,16 @@ export default async function TokenPage({ params }: PageProps) {
             <Suspense fallback={<SynthesisSkeleton />}>
               <AISynthesisSlow ca={ca} fast={fast} />
             </Suspense>
+          </div>
+
+          {/* Row 1b: Buy/sell pressure full-width. The first-row degen
+              scan, "are people buying or selling right now?". */}
+          <div
+            data-stagger-child
+            className="mb-5"
+            style={{ opacity: 0 }}
+          >
+            <BuySellPressure analysis={fastAnalysis} />
           </div>
 
           {/* Row 2: Signal + Risk side-by-side. */}

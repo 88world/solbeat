@@ -89,12 +89,17 @@ async function buildFast(ca: string): Promise<FastAnalysis> {
   const market: TokenMarket = {
     price_usd:
       birdeye?.price ?? (dexPair?.priceUsd ? Number(dexPair.priceUsd) : null),
+    price_change_5m: dexPair?.priceChange?.m5 ?? null,
     price_change_1h: birdeye?.priceChange1h ?? dexPair?.priceChange?.h1 ?? null,
+    price_change_6h: dexPair?.priceChange?.h6 ?? null,
     price_change_24h:
       birdeye?.priceChange24h ?? dexPair?.priceChange?.h24 ?? null,
     price_change_7d: birdeye?.priceChange7d ?? null,
     market_cap: birdeye?.marketCap ?? dexPair?.marketCap ?? null,
     fdv: birdeye?.fdv ?? dexPair?.fdv ?? null,
+    volume_5m: dexPair?.volume?.m5 ?? null,
+    volume_1h: dexPair?.volume?.h1 ?? null,
+    volume_6h: dexPair?.volume?.h6 ?? null,
     volume_24h: birdeye?.volume24h ?? dexPair?.volume?.h24 ?? null,
     liquidity_usd: birdeye?.liquidity ?? dexPair?.liquidity?.usd ?? null,
     lp_locked: null,
@@ -103,6 +108,18 @@ async function buildFast(ca: string): Promise<FastAnalysis> {
       ? Math.max(0, (Date.now() - dexPair.pairCreatedAt) / 3_600_000)
       : null,
     dex: dexPair?.dexId ?? null,
+    txns_5m: dexPair?.txns?.m5
+      ? { buys: dexPair.txns.m5.buys ?? 0, sells: dexPair.txns.m5.sells ?? 0 }
+      : null,
+    txns_1h: dexPair?.txns?.h1
+      ? { buys: dexPair.txns.h1.buys ?? 0, sells: dexPair.txns.h1.sells ?? 0 }
+      : null,
+    txns_6h: dexPair?.txns?.h6
+      ? { buys: dexPair.txns.h6.buys ?? 0, sells: dexPair.txns.h6.sells ?? 0 }
+      : null,
+    txns_24h: dexPair?.txns?.h24
+      ? { buys: dexPair.txns.h24.buys ?? 0, sells: dexPair.txns.h24.sells ?? 0 }
+      : null,
   };
 
   const holdersData: TokenHolders = (await safe(
@@ -252,12 +269,17 @@ async function buildAnalysis(ca: string): Promise<TokenAnalysis> {
   const market: TokenMarket = {
     price_usd:
       birdeye?.price ?? (dexPair?.priceUsd ? Number(dexPair.priceUsd) : null),
+    price_change_5m: dexPair?.priceChange?.m5 ?? null,
     price_change_1h: birdeye?.priceChange1h ?? dexPair?.priceChange?.h1 ?? null,
+    price_change_6h: dexPair?.priceChange?.h6 ?? null,
     price_change_24h:
       birdeye?.priceChange24h ?? dexPair?.priceChange?.h24 ?? null,
     price_change_7d: birdeye?.priceChange7d ?? null,
     market_cap: birdeye?.marketCap ?? dexPair?.marketCap ?? null,
     fdv: birdeye?.fdv ?? dexPair?.fdv ?? null,
+    volume_5m: dexPair?.volume?.m5 ?? null,
+    volume_1h: dexPair?.volume?.h1 ?? null,
+    volume_6h: dexPair?.volume?.h6 ?? null,
     volume_24h: birdeye?.volume24h ?? dexPair?.volume?.h24 ?? null,
     liquidity_usd: birdeye?.liquidity ?? dexPair?.liquidity?.usd ?? null,
     lp_locked: null,
@@ -266,6 +288,18 @@ async function buildAnalysis(ca: string): Promise<TokenAnalysis> {
       ? Math.max(0, (Date.now() - dexPair.pairCreatedAt) / 3_600_000)
       : null,
     dex: dexPair?.dexId ?? null,
+    txns_5m: dexPair?.txns?.m5
+      ? { buys: dexPair.txns.m5.buys ?? 0, sells: dexPair.txns.m5.sells ?? 0 }
+      : null,
+    txns_1h: dexPair?.txns?.h1
+      ? { buys: dexPair.txns.h1.buys ?? 0, sells: dexPair.txns.h1.sells ?? 0 }
+      : null,
+    txns_6h: dexPair?.txns?.h6
+      ? { buys: dexPair.txns.h6.buys ?? 0, sells: dexPair.txns.h6.sells ?? 0 }
+      : null,
+    txns_24h: dexPair?.txns?.h24
+      ? { buys: dexPair.txns.h24.buys ?? 0, sells: dexPair.txns.h24.sells ?? 0 }
+      : null,
   };
 
   const holdersData: TokenHolders = await safe(
