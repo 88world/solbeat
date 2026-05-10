@@ -3,6 +3,7 @@ import { Hero } from "@/components/hero/Hero";
 import { EcosystemStrip } from "@/components/hero/EcosystemStrip";
 import { CursorBlob } from "@/components/shared/CursorBlob";
 import { Aurora } from "@/components/shared/Aurora";
+import { ScrollReveal } from "@/components/shared/ScrollReveal";
 
 export default function Home() {
   return (
@@ -22,7 +23,12 @@ export default function Home() {
         {/* Below-the-fold: live ecosystem readings. Network TPS, DeFi TVL,
             NFT activity, SOL macro. Scroll past the hero to see the whole
             Solana surface in one view. */}
-        <section className="mx-auto max-w-[1320px] w-full px-5 lg:px-8 py-10 lg:py-14">
+        <ScrollReveal
+          className="mx-auto max-w-[1320px] w-full px-5 lg:px-8 py-10 lg:py-14"
+          childSelector=":scope > *"
+          step={80}
+          travel={28}
+        >
           <header className="mb-5 flex items-baseline justify-between flex-wrap gap-3">
             <div>
               <h2 className="text-[22px] sm:text-[26px] font-bold tracking-tight text-text-primary leading-tight">
@@ -37,7 +43,7 @@ export default function Home() {
             </span>
           </header>
           <EcosystemStrip />
-        </section>
+        </ScrollReveal>
       </main>
       <footer className="px-6 pb-5 pt-2 text-center text-[11px] text-text-muted">
         Built by Block Valley Labs · Solana Frontier Hackathon
