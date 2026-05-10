@@ -21,17 +21,35 @@ export function RecentTweets({ tweets }: { tweets: TweetSnippet[] }) {
     .sort((a, b) => b.engagement - a.engagement)
     .slice(0, 6);
 
+  // Aggregate stats for the header.
+  const totalEngagement = tweets.reduce((acc, t) => acc + t.engagement, 0);
+  const verifiedCount = tweets.filter(
+    (t) => t.verified || t.followers > 100_000,
+  ).length;
+
   return (
     <div className="glass rounded-2xl p-5 sm:p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-[10px] uppercase tracking-[0.2em] text-text-muted font-bold">
-          Social signal · {tweets.length} posts
-        </h3>
-        <span className="text-[9.5px] uppercase tracking-[0.18em] text-text-muted">
-          ranked by engagement
+      <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <h3 className="text-[14px] font-bold tracking-tight text-text-primary leading-tight">
+            Social signal
+          </h3>
+          <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
+            {tweets.length} posts ·{" "}
+            <span className="text-mono">
+              {humanizeNumber(totalEngagement)}
+            </span>{" "}
+            engagement ·{" "}
+            <span className="text-mono">{verifiedCount}</span> from blue-checks
+          </p>
+        </div>
+        <span className="text-[9.5px] uppercase tracking-[0.20em] text-text-muted font-bold">
+          ranked by reach
         </span>
       </div>
-      <ul className="space-y-3">
+      {/* Two-column dense grid on wider screens so we can fit more cards
+          before the user has to scroll. Single column on mobile. */}
+      <ul className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
         {top.map((t, i) => (
           <TweetCard key={i} tweet={t} />
         ))}
@@ -48,48 +66,76 @@ function TweetCard({ tweet }: { tweet: TweetSnippet }) {
   const tweetUrl = tweet.url ?? `https://x.com/${tweet.handle}`;
   const displayName = tweet.display_name?.trim();
 
+  // Reach tier — drives the card's accent stripe color. Big accounts get
+  // a brand-pink stripe; tier 2 gets violet; everyone else neutral.
+  const reachTier =
+    tweet.followers >= 100_000
+      ? { color: "#FF2D9C", label: "Whale" }
+      : tweet.followers >= 10_000
+        ? { color: "#5e5cff", label: "Mid" }
+        : null;
+
   return (
     <li>
       <a
         href={tweetUrl}
         target="_blank"
         rel="noreferrer"
-        className="block rounded-2xl border border-border-subtle px-4 py-3.5 hover:border-border-emphasized hover:bg-bg-elevated/40 transition group"
+        className="block rounded-xl px-3.5 py-3 hover:scale-[1.01] transition-all relative overflow-hidden h-full group"
+        style={{
+          background: "var(--glass-soft)",
+          border: "1px solid var(--border-subtle)",
+        }}
       >
-        <div className="flex items-start gap-3">
+        {/* Reach-tier side stripe. Whale = pink, mid = violet, everyone
+            else no stripe. Quick visual hierarchy without reading numbers. */}
+        {reachTier && (
+          <div
+            aria-hidden
+            className="absolute left-0 top-0 bottom-0 w-[3px]"
+            style={{
+              background: `linear-gradient(180deg, ${reachTier.color}aa, ${reachTier.color}33)`,
+            }}
+          />
+        )}
+        <div className="flex items-start gap-2.5 relative">
           <Avatar handle={tweet.handle} avatarUrl={tweet.avatar_url} />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
               {displayName && (
-                <span className="font-bold text-text-primary text-[13px] truncate">
+                <span className="font-bold text-text-primary text-[12.5px] truncate max-w-[140px]">
                   {displayName}
                 </span>
               )}
               {verified && <VerifiedDot />}
-              <span className="text-text-muted text-[12px] truncate">
+              <span className="text-text-muted text-[11px] truncate text-mono">
                 @{tweet.handle}
               </span>
-              <span className="text-text-muted text-[11.5px]">·</span>
-              <span className="text-text-muted text-[11.5px]">
+              <span className="text-text-muted text-[10.5px] ml-auto shrink-0">
                 {ago(tweet.age_minutes)}
               </span>
-              {tweet.followers > 0 && (
-                <>
-                  <span className="text-text-muted text-[11.5px]">·</span>
-                  <span className="text-text-muted text-[11.5px] text-mono">
-                    {humanizeNumber(tweet.followers)} followers
-                  </span>
-                </>
-              )}
             </div>
-            <p className="text-[13.5px] text-text-primary leading-[1.45]">
+            <p className="text-[12.5px] text-text-primary leading-[1.45] line-clamp-3">
               {cleanText}
             </p>
-            {tweet.engagement > 0 && (
-              <div className="mt-2.5 flex items-center gap-4 text-[11px] text-text-muted">
+            <div className="mt-2 flex items-center gap-3 text-[10px] text-text-muted">
+              {tweet.followers > 0 && (
+                <span className="text-mono">
+                  {humanizeNumber(tweet.followers)} followers
+                </span>
+              )}
+              {tweet.engagement > 0 && (
                 <Engagement icon="heart" value={tweet.engagement} />
-              </div>
-            )}
+              )}
+              {reachTier && (
+                <span
+                  className="ml-auto text-[8.5px] uppercase tracking-[0.16em] font-bold"
+                  style={{ color: reachTier.color }}
+                >
+                  {reachTier.label}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </a>

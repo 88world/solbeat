@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { animate, stagger } from "animejs";
-import { TrendingTreemap } from "./TrendingTreemap";
+import { LiveFlow } from "./LiveFlow";
 import { TrendingList } from "./TrendingList";
 import { CaPasteBox } from "./CaPasteBox";
 import { MarketPulse } from "./MarketPulse";
@@ -153,7 +153,7 @@ export function Hero() {
             data-sphere-in
             className="flex items-center justify-center min-h-0"
           >
-            <TrendingTreemap tokens={tokens} size={sphereSize} heat={heat} />
+            <LiveFlow tokens={tokens} size={sphereSize} heat={heat} />
           </div>
 
           <div data-fade-up className="hidden lg:flex justify-start">

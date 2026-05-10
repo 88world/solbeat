@@ -1,7 +1,21 @@
 import { FEES, SOL_MINT } from "@/config/constants";
 
-const QUOTE_BASE = "https://quote-api.jup.ag/v6";
-const PRICE_BASE = "https://price.jup.ag/v6";
+// Jupiter API migration: quote-api.jup.ag/v6 was deprecated end of Sept 2025.
+// Free tier now lives at lite-api.jup.ag/swap/v1 (also being phased out
+// eventually in favor of api.jup.ag with a key — no firm date). Lite
+// works without auth so we ship with that as the default. If
+// JUPITER_API_KEY is set in env we use the paid api.jup.ag.
+const JUP_API_KEY = process.env.JUPITER_API_KEY;
+const QUOTE_BASE = JUP_API_KEY
+  ? "https://api.jup.ag/swap/v1"
+  : "https://lite-api.jup.ag/swap/v1";
+const PRICE_BASE = JUP_API_KEY
+  ? "https://api.jup.ag/price/v3"
+  : "https://lite-api.jup.ag/price/v3";
+
+const jupHeaders: Record<string, string> = JUP_API_KEY
+  ? { "x-api-key": JUP_API_KEY }
+  : {};
 
 export type JupiterQuote = {
   inputMint: string;
@@ -32,6 +46,7 @@ export async function getQuote(opts: {
   });
   try {
     const r = await fetch(`${QUOTE_BASE}/quote?${params.toString()}`, {
+      headers: jupHeaders,
       next: { revalidate: 0 },
     });
     if (!r.ok) return null;
@@ -49,7 +64,7 @@ export async function getSwapTransaction(opts: {
   try {
     const r = await fetch(`${QUOTE_BASE}/swap`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...jupHeaders },
       body: JSON.stringify({
         quoteResponse: opts.quote,
         userPublicKey: opts.userPublicKey,
@@ -66,12 +81,18 @@ export async function getSwapTransaction(opts: {
 
 export async function fetchPrice(mint: string): Promise<number | null> {
   try {
-    const r = await fetch(`${PRICE_BASE}/price?ids=${mint}`, {
+    const r = await fetch(`${PRICE_BASE}?ids=${mint}`, {
+      headers: jupHeaders,
       next: { revalidate: 30 },
     });
     if (!r.ok) return null;
-    const json = (await r.json()) as { data?: Record<string, { price?: number }> };
-    return json.data?.[mint]?.price ?? null;
+    // Price v3 shape: { [mint]: { usdPrice: number, ... } }
+    const json = (await r.json()) as Record<
+      string,
+      { usdPrice?: number; price?: number }
+    >;
+    const entry = json[mint];
+    return entry?.usdPrice ?? entry?.price ?? null;
   } catch {
     return null;
   }

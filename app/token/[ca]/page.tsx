@@ -177,30 +177,28 @@ export default async function TokenPage({ params }: PageProps) {
             <BondingCurveCard ca={ca} />
           </div>
 
-          {/* Row 1: PriceCard (left, fast) + AI Synthesis (right, slow). The
-              "what's it priced at + what does it mean" headline. */}
+          {/* COMMAND DECK: degen scans first.
+              Row 1: PriceCard (left) + Buy/Sell pressure (right). The two
+              fastest reads, paired so the eye scans price → flow without
+              jumping. */}
           <div
             data-stagger-child
-            className="grid grid-cols-1 lg:grid-cols-[1fr_1.15fr] gap-5 lg:gap-6 mb-5"
+            className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-5 lg:gap-6 mb-5"
             style={{ opacity: 0 }}
           >
             <PriceCard analysis={fastAnalysis} />
+            <BuySellPressure analysis={fastAnalysis} />
+          </div>
+
+          {/* Row 2: AI Synthesis full-width. The narrative read, wide
+              enough that the bullets breathe. */}
+          <div data-stagger-child className="mb-5" style={{ opacity: 0 }}>
             <Suspense fallback={<SynthesisSkeleton />}>
               <AISynthesisSlow ca={ca} fast={fast} />
             </Suspense>
           </div>
 
-          {/* Row 1b: Buy/sell pressure full-width. The first-row degen
-              scan, "are people buying or selling right now?". */}
-          <div
-            data-stagger-child
-            className="mb-5"
-            style={{ opacity: 0 }}
-          >
-            <BuySellPressure analysis={fastAnalysis} />
-          </div>
-
-          {/* Row 2: Signal + Risk side-by-side. */}
+          {/* Row 3: Signal + Risk side-by-side. */}
           <div
             data-stagger-child
             className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5"
@@ -214,7 +212,7 @@ export default async function TokenPage({ params }: PageProps) {
             </Suspense>
           </div>
 
-          {/* Row 3: BubbleMap (left, fast) + HolderList (right, fast). */}
+          {/* Row 4: BubbleMap (left) + HolderList (right). */}
           <div
             data-stagger-child
             className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-5 lg:gap-6 mb-5"
@@ -224,22 +222,24 @@ export default async function TokenPage({ params }: PageProps) {
             <HolderList holders={fast.holders} ca={fast.metadata.ca} />
           </div>
 
-          {/* Row 4a: Pulse timeline. */}
+          {/* Row 5: Pulse timeline. */}
           <div data-stagger-child style={{ opacity: 0 }}>
             <Suspense fallback={null}>
               <PulseTimelineRow ca={ca} />
             </Suspense>
           </div>
 
-          {/* Row 4b: Catalysts full-width. */}
-          <div data-stagger-child className="mb-5" style={{ opacity: 0 }}>
+          {/* Row 6: Catalysts (left) + Recent tweets (right). Command
+              center feel — news + social side by side, no scrolling
+              between them. Catalysts is narrower since each item is short. */}
+          <div
+            data-stagger-child
+            className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-5 lg:gap-6 mb-8"
+            style={{ opacity: 0 }}
+          >
             <Suspense fallback={<CardSkeleton lines={6} />}>
               <CatalystSlow ca={ca} fast={fast} />
             </Suspense>
-          </div>
-
-          {/* Row 5: Recent tweets, full-width. */}
-          <div data-stagger-child className="mb-8" style={{ opacity: 0 }}>
             <Suspense fallback={<CardSkeleton lines={5} />}>
               <TweetsSlow ca={ca} fast={fast} />
             </Suspense>
