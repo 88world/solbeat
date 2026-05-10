@@ -216,7 +216,10 @@ async function recordPulseSnapshot(
     synthesis: null,
   };
   const signals = computeSignals(merged);
-  const verdict = composeVerdict(signals);
+  const verdict = composeVerdict(signals, {
+    ageHours: fast.metadata.age_hours,
+    liquidity: fast.market.liquidity_usd,
+  });
   // Take the 3 highest-weight signal labels to render as chips on the timeline.
   const topLabels = [...signals]
     .sort((a, b) => b.weight - a.weight)

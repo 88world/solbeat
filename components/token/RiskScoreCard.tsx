@@ -105,18 +105,48 @@ function composeFindings(
 ): Finding[] {
   const out: Finding[] = [];
 
-  // Authorities, name the actual finding (mint OR freeze) rather than a generic bucket
+  // Authorities, context-aware. Established tokens with deep LP get a
+  // softer finding text + lower score, since an active mint authority on
+  // a 3yr-old DAO-governed token is meaningfully different from an active
+  // mint authority on a wallet that launched yesterday.
+  const ageHForAuth = a.metadata.age_hours ?? 0;
+  const liqForAuth = a.market.liquidity_usd ?? 0;
+  const volForAuth = a.market.volume_24h ?? 0;
+  const veryEstablished =
+    ageHForAuth > 24 * 365 && liqForAuth > 500_000 && volForAuth > 100_000;
+  const moderatelyEstablished =
+    !veryEstablished && ageHForAuth > 24 * 180 && liqForAuth > 250_000 && volForAuth > 50_000;
+
   if (a.metadata.mint_authority) {
-    out.push({
-      label: "Mint authority active",
-      detail: "Supply is not fixed, issuer can mint new tokens.",
-      score: 95,
-    });
+    if (veryEstablished) {
+      out.push({
+        label: "Mint authority set",
+        detail:
+          "Authority is set, but the token has 1yr+ of clean track record and deep liquidity. Likely a DAO/multisig holder. Lower practical risk than the raw flag.",
+        score: 38, // matches 95 × 0.40 discount in the heuristic
+      });
+    } else if (moderatelyEstablished) {
+      out.push({
+        label: "Mint authority set",
+        detail:
+          "Authority is set on a 6mo+ token with healthy liquidity. Less alarming than on a fresh launch, but verify the holder.",
+        score: 67,
+      });
+    } else {
+      out.push({
+        label: "Mint authority active",
+        detail:
+          "Supply is not fixed. Issuer can mint new tokens at any time, diluting holders.",
+        score: 95,
+      });
+    }
   } else if (a.metadata.freeze_authority) {
     out.push({
       label: "Freeze authority active",
-      detail: "Issuer can freeze any holder's balance at any time.",
-      score: 80,
+      detail: veryEstablished
+        ? "Freeze authority is set, but token is established with deep liquidity. Practical risk is lower."
+        : "Issuer can freeze any holder's balance at any time.",
+      score: veryEstablished ? 52 : 80,
     });
   } else {
     out.push({

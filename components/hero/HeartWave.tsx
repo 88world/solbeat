@@ -77,6 +77,21 @@ export function HeartWave({
     let raf = 0;
     let last = performance.now();
     let t = 0;
+    // Viewport + tab-visibility gating. Pause rAF when off-screen or hidden
+    // to drop the canvas redraw cost when the user isn't looking.
+    let onScreen = true;
+    let tabVisible = !document.hidden;
+    const io = new IntersectionObserver(
+      (entries) => {
+        onScreen = entries[0]?.isIntersecting ?? true;
+      },
+      { threshold: 0.01 },
+    );
+    io.observe(canvas);
+    const onVis = () => {
+      tabVisible = !document.hidden;
+    };
+    document.addEventListener("visibilitychange", onVis);
 
     // EMA-smoothed components so changes ease in.
     let sH = heatRef.current;
@@ -90,6 +105,11 @@ export function HeartWave({
 
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
+      // Don't burn frames if the user can't see the canvas.
+      if (!onScreen || !tabVisible) {
+        last = now;
+        return;
+      }
       const dt = Math.min(50, now - last) / 1000;
       last = now;
       t += dt;
@@ -197,7 +217,11 @@ export function HeartWave({
       drawSmooth();
     };
     raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      io.disconnect();
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [width, height]);
 
   return (

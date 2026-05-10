@@ -141,7 +141,10 @@ function computeHypeQuality(tweets: TokenAnalysis["tweets"]): Signal | null {
   return null;
 }
 
-export function composeVerdict(signals: Signal[]): {
+export function composeVerdict(
+  signals: Signal[],
+  ctx: { ageHours?: number | null; liquidity?: number | null } = {},
+): {
   text: string;
   color: string;
   severity: Severity;
@@ -171,7 +174,21 @@ export function composeVerdict(signals: Signal[]): {
   const top = [...signals].sort((a, b) => b.weight - a.weight)[0];
   const head = top.label.charAt(0).toUpperCase() + top.label.slice(1).toLowerCase();
 
+  // Context-aware: ESTABLISHED tokens (>1yr, deep LP) get a softer read
+  // even when the rule-based score is bad, because the bad signal is
+  // usually "mint authority active" which means much less on a 3-year-old
+  // token with $1M+ LP than on a fresh dev launch.
+  const established =
+    (ctx.ageHours ?? 0) > 24 * 365 && (ctx.liquidity ?? 0) > 500_000;
+
   if (avg < -0.6) {
+    if (established) {
+      return {
+        text: `${head}, but the token has 1yr+ of clean track record. Lower practical risk than the raw flags suggest.`,
+        color: "#d6601a",
+        severity: "warn",
+      };
+    }
     return {
       text: `${head}. Sit on your hands.`,
       color: "#c1374a",
@@ -179,6 +196,13 @@ export function composeVerdict(signals: Signal[]): {
     };
   }
   if (avg < -0.2) {
+    if (established) {
+      return {
+        text: `${head} flagged on an established token. Verify the actor, not the flag.`,
+        color: "#a3680a",
+        severity: "warn",
+      };
+    }
     return {
       text: `${head} flagged. Verify before sizing.`,
       color: "#d6601a",

@@ -15,7 +15,10 @@ import {
  */
 export function SignalPanel({ analysis }: { analysis: TokenAnalysis }) {
   const signals = computeSignals(analysis);
-  const verdict = composeVerdict(signals);
+  const verdict = composeVerdict(signals, {
+    ageHours: analysis.metadata.age_hours,
+    liquidity: analysis.market.liquidity_usd,
+  });
 
   // Severity counts so the user can see the verdict's evidence at a glance.
   const counts = signals.reduce(

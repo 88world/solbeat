@@ -70,6 +70,23 @@ export function ECGTrace({
     let bpmFiltered = bpmRef.current;
     let heatFiltered = heatRef.current;
 
+    // Viewport + tab-visibility gate so the 4-pass canvas draw + particle
+    // sim doesn't burn battery when the user is on another tab or scrolled
+    // far past the hero.
+    let onScreen = true;
+    let tabVisible = !document.hidden;
+    const io = new IntersectionObserver(
+      (entries) => {
+        onScreen = entries[0]?.isIntersecting ?? true;
+      },
+      { threshold: 0.01 },
+    );
+    io.observe(canvas);
+    const onVis = () => {
+      tabVisible = !document.hidden;
+    };
+    document.addEventListener("visibilitychange", onVis);
+
     // Particle system. Index up to a max of 64 alive at once.
     type Particle = {
       x: number;
@@ -90,6 +107,10 @@ export function ECGTrace({
 
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
+      if (!onScreen || !tabVisible) {
+        last = now;
+        return;
+      }
       const dt = Math.min(50, now - last) / 1000;
       last = now;
       timeSec += dt;
@@ -252,7 +273,11 @@ export function ECGTrace({
     };
     raf = requestAnimationFrame(draw);
 
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      io.disconnect();
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [width, height, color]);
 
   return (

@@ -38,13 +38,26 @@ export async function fetchPairsByMint(mint: string): Promise<DexPair[]> {
   return (json.pairs ?? []).filter((p) => p.chainId === "solana");
 }
 
-/** Choose the deepest Solana pair by USD liquidity. */
+/**
+ * Pick the canonical Solana pair for a token. Was sorted by raw liquidity
+ * which broke on tokens like BONK where a $1M-liq Orca pool has $125/h
+ * of activity while a $530K Meteora pool runs $75K/h with 250+ buys.
+ *
+ * New score: volume × log10(liquidity), weights activity heavily but
+ * still requires meaningful depth. Falls back to liquidity alone when
+ * no pair has reported volume.
+ */
 export async function fetchBestSolanaPair(mint: string): Promise<DexPair | null> {
   const pairs = await fetchPairsByMint(mint);
   if (pairs.length === 0) return null;
-  return pairs
-    .slice()
-    .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
+  const score = (p: DexPair): number => {
+    const vol = p.volume?.h24 ?? 0;
+    const liq = p.liquidity?.usd ?? 0;
+    if (vol > 0 && liq > 0) return vol * Math.log10(liq + 10);
+    if (liq > 0) return liq * 0.001; // tiebreak so we never return null when liquidity exists
+    return 0;
+  };
+  return pairs.slice().sort((a, b) => score(b) - score(a))[0];
 }
 
 // Real-time trending. DexScreener's search endpoint matches on the dexId

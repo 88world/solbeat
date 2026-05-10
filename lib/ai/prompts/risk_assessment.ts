@@ -95,10 +95,29 @@ export function computeHeuristicRisk(
   const top10 = a.holders.top_10_pct ?? 0;
   const holders = Math.min(100, Math.max(top1 > 25 ? 70 : 0, top10 > 50 ? 70 : Math.min(top10, 60)));
 
+  // CONTEXT-AWARE authority risk. Flat "mint live = 95" was wrong for
+  // tokens like BONK where the authority is held by a DAO multisig that
+  // has not been used adversarially in 3 years. An active mint on a
+  // 3yr+ pool with deep liquidity is meaningfully different from a fresh
+  // dev wallet that minted yesterday.
+  //
+  // Discount tiers:
+  //   >1yr + >$500k liq + >$100k 24h vol → 60% off mint risk (95 → 38)
+  //   >180d + >$250k liq + >$50k 24h vol → 30% off (95 → 67)
+  //   anything else                       → no discount
+  // Freeze gets a smaller discount, freeze can lock balances in one tx
+  // (less "track record forgiveness" than mint dilution).
+  const ageH = a.metadata.age_hours ?? 0;
+  const vol = a.market.volume_24h ?? 0;
+  const veryEstablished = ageH > 24 * 365 && liq > 500_000 && vol > 100_000;
+  const moderatelyEstablished =
+    !veryEstablished && ageH > 24 * 180 && liq > 250_000 && vol > 50_000;
+  const mintDiscount = veryEstablished ? 0.40 : moderatelyEstablished ? 0.70 : 1.0;
+  const freezeDiscount = veryEstablished ? 0.65 : moderatelyEstablished ? 0.85 : 1.0;
   const authorities = a.metadata.mint_authority
-    ? 95
+    ? Math.round(95 * mintDiscount)
     : a.metadata.freeze_authority
-      ? 80
+      ? Math.round(80 * freezeDiscount)
       : 10;
 
   const age = a.metadata.age_hours == null
@@ -111,7 +130,6 @@ export function computeHeuristicRisk(
           ? 25
           : 10;
 
-  const vol = a.market.volume_24h ?? 0;
   const ratio = liq > 0 ? vol / liq : 0;
   const volume_quality = ratio > 20 ? 80 : ratio > 10 ? 65 : ratio > 5 ? 35 : 15;
 
@@ -123,20 +141,52 @@ export function computeHeuristicRisk(
     score >= 20 ? "LOW" : "SAFE";
 
   const factors = { liquidity, holders, authorities, age, volume_quality };
-  const top_concern = pickTopConcern(factors);
+  const top_concern = pickTopConcern(factors, {
+    veryEstablished,
+    moderatelyEstablished,
+    hasMint: !!a.metadata.mint_authority,
+    hasFreeze: !!a.metadata.freeze_authority,
+  });
 
   return { score, label, factors, top_concern };
 }
 
-function pickTopConcern(f: RiskScore["factors"]): string {
+function pickTopConcern(
+  f: RiskScore["factors"],
+  ctx: {
+    veryEstablished: boolean;
+    moderatelyEstablished: boolean;
+    hasMint: boolean;
+    hasFreeze: boolean;
+  },
+): string {
   const entries = Object.entries(f) as [keyof RiskScore["factors"], number][];
   const [worst] = entries.sort((a, b) => b[1] - a[1]);
   switch (worst[0]) {
-    case "liquidity": return "Thin liquidity, even small sells can move the price meaningfully.";
-    case "holders": return "Concentrated holders, a single wallet exit could collapse the price.";
-    case "authorities": return "Active mint or freeze authority, supply and account state are not guaranteed fixed.";
-    case "age": return "Very young pool, too early to read sustainable demand.";
-    case "volume_quality": return "Volume-to-liquidity ratio looks like wash trading rather than organic interest.";
-    default: return "Multiple moderate risk factors, read the full analysis.";
+    case "liquidity":
+      return "Thin liquidity. Small sells move the price meaningfully.";
+    case "holders":
+      return "Concentrated holders. One wallet exit could collapse the price.";
+    case "authorities":
+      // Context-aware: established tokens with deep LP get the softer read.
+      if (ctx.veryEstablished && ctx.hasMint) {
+        return "Mint authority is set but the token has 1yr+ of clean track record and deep liquidity. Likely held by a DAO/multisig. Lower practical risk than the raw flag suggests.";
+      }
+      if (ctx.moderatelyEstablished && ctx.hasMint) {
+        return "Mint authority is set on a 6mo+ token with healthy liquidity. Less alarming than on a fresh launch but still verify the holder.";
+      }
+      if (ctx.hasMint) {
+        return "Mint authority active on a fresh token. Supply is not fixed, issuer can dilute holders at will.";
+      }
+      if (ctx.hasFreeze) {
+        return "Freeze authority active. Issuer can lock any holder's balance with a single transaction.";
+      }
+      return "Authority concerns flagged.";
+    case "age":
+      return "Very young pool. Too early to read sustainable demand.";
+    case "volume_quality":
+      return "Volume-to-liquidity ratio looks like wash trading rather than organic interest.";
+    default:
+      return "Multiple moderate risk factors, read the full analysis.";
   }
 }
