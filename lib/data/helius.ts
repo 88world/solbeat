@@ -1,5 +1,6 @@
 import type { TokenHolders, TokenMetadata } from "@/types/token";
 import { LIMITS } from "@/config/constants";
+import { classifyOwner } from "@/lib/solana/classifier";
 
 const HELIUS_KEY = process.env.HELIUS_API_KEY;
 const HELIUS_RPC = HELIUS_KEY
@@ -140,9 +141,25 @@ export async function getAsset(mint: string): Promise<TokenMetadata | null> {
 
 type LargestAccount = { address: string; amount: string; uiAmount: number; decimals: number };
 
+type ParsedTokenAccount = {
+  data: {
+    parsed?: {
+      info?: {
+        owner?: string;
+        mint?: string;
+        tokenAmount?: { uiAmount?: number; amount?: string };
+      };
+    };
+  } | null;
+  lamports?: number;
+  owner?: string;
+};
+
 export async function getTokenHolders(
   mint: string,
   totalSupply: number | null,
+  /** Token / pool age in hours, used for sniper detection. */
+  ageHours: number | null = null,
 ): Promise<TokenHolders> {
   const result = await rpc<{ value: LargestAccount[] }>(
     "getTokenLargestAccounts",
@@ -154,17 +171,46 @@ export async function getTokenHolders(
     return { total: null, top_1_pct: null, top_10_pct: null, top_20: [] };
   }
 
-  const top20 = accounts.slice(0, LIMITS.HOLDER_TOP_N).map((a) => ({
-    address: a.address,
-    amount: a.uiAmount,
-    pct: (a.uiAmount / totalSupply) * 100,
-  }));
+  const slice = accounts.slice(0, LIMITS.HOLDER_TOP_N);
+
+  // Resolve OWNER addresses for each token-account address. One RPC call
+  // batched via getMultipleAccounts. Without this we'd be classifying token
+  // accounts (every one of them owned by the SPL Token program), which
+  // tells us nothing.
+  const ownerMap = new Map<string, string>();
+  const owners = await rpc<{ value: Array<ParsedTokenAccount | null> }>(
+    "getMultipleAccounts",
+    [
+      slice.map((a) => a.address),
+      { encoding: "jsonParsed", commitment: "confirmed" },
+    ],
+  );
+  if (owners?.value) {
+    owners.value.forEach((acc, i) => {
+      const owner = acc?.data?.parsed?.info?.owner;
+      const tokenAcc = slice[i].address;
+      if (owner) ownerMap.set(tokenAcc, owner);
+    });
+  }
+
+  const top20 = slice.map((a) => {
+    const owner = ownerMap.get(a.address) ?? a.address;
+    const pct = (a.uiAmount / totalSupply) * 100;
+    const tag = classifyOwner(owner, { pct, ageHours });
+    return {
+      address: a.address,
+      owner,
+      amount: a.uiAmount,
+      pct,
+      tag,
+    };
+  });
 
   const top1Pct = top20[0]?.pct ?? null;
   const top10Sum = top20.slice(0, 10).reduce((s, h) => s + h.pct, 0);
 
   return {
-    total: null, // not directly available, would need getProgramAccounts
+    total: null,
     top_1_pct: top1Pct,
     top_10_pct: top10Sum || null,
     top_20: top20,

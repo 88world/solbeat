@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { TokenHolders } from "@/types/token";
 import { shortAddress } from "@/lib/utils";
+import { tagStyle, type HolderTag } from "@/lib/solana/classifier";
 
 /**
  * Top holders list. Shows top 10 by default; "Show all 20" expands to the
@@ -66,20 +67,37 @@ export function HolderList({
       <ul className="space-y-1.5">
         {visible.map((h, i) => {
           const w = Math.min(100, (h.pct / max) * 100);
+          const tag = (h.tag ?? { kind: "fresh", label: "Holder" }) as HolderTag;
+          const style = tagStyle(tag.kind);
           return (
-            <li key={h.address} className="flex items-center gap-3 text-[12px]">
+            <li
+              key={h.address}
+              className="flex items-center gap-3 text-[12px] py-0.5 group"
+            >
               <span className="text-text-muted text-mono w-5 text-right">
                 {String(i + 1).padStart(2, "0")}
               </span>
               <a
-                href={`https://solscan.io/account/${h.address}`}
+                href={`https://solscan.io/account/${h.owner ?? h.address}`}
                 target="_blank"
                 rel="noreferrer"
-                className="text-mono text-text-secondary hover:text-text-primary transition w-[112px] shrink-0"
+                className="text-mono text-text-secondary hover:text-text-primary transition w-[100px] shrink-0"
+                title={h.owner ?? h.address}
               >
-                {shortAddress(h.address, 4, 4)}
+                {shortAddress(h.owner ?? h.address, 4, 4)}
               </a>
-              <div className="flex-1 h-1.5 bg-text-muted/15 rounded-full overflow-hidden">
+              <span
+                className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-[0.10em] shrink-0 max-w-[120px] truncate"
+                style={{
+                  background: style.bg,
+                  color: style.color,
+                  boxShadow: `inset 0 0 0 1px ${style.color}33`,
+                }}
+                title={tag.label}
+              >
+                {tag.label}
+              </span>
+              <div className="flex-1 h-1.5 bg-text-muted/15 rounded-full overflow-hidden min-w-[40px]">
                 <div
                   className="h-full bg-gradient-to-r from-accent-primary to-accent-pulse"
                   style={{ width: `${w}%` }}

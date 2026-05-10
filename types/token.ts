@@ -31,7 +31,20 @@ export type TokenHolders = {
   total: number | null;
   top_1_pct: number | null;
   top_10_pct: number | null;
-  top_20: Array<{ address: string; amount: number; pct: number }>;
+  top_20: Array<{
+    /** Token-account address (what getTokenLargestAccounts returns). */
+    address: string;
+    /** OWNER (wallet) address. Same as address for legacy fallback when we couldn't resolve. */
+    owner: string;
+    amount: number;
+    pct: number;
+    /**
+     * Plain-English classification: "Raydium pool", "CEX · Binance", "Burn 🔥",
+     * "Whale", "Sniper · 8h pool", "Holder". Computed in lib/solana/classifier.
+     * Stored as a discriminated union under HolderTag.
+     */
+    tag: { kind: string; label: string };
+  }>;
 };
 
 export type TweetSnippet = {

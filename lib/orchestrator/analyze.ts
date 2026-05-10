@@ -106,7 +106,7 @@ async function buildFast(ca: string): Promise<FastAnalysis> {
   };
 
   const holdersData: TokenHolders = (await safe(
-    () => getTokenHolders(ca, metadata.supply),
+    () => getTokenHolders(ca, metadata.supply, metadata.age_hours),
     "helius_holders",
     warnings,
   )) ?? { total: null, top_1_pct: null, top_10_pct: null, top_20: [] };
@@ -269,7 +269,7 @@ async function buildAnalysis(ca: string): Promise<TokenAnalysis> {
   };
 
   const holdersData: TokenHolders = await safe(
-    () => getTokenHolders(ca, metadata.supply),
+    () => getTokenHolders(ca, metadata.supply, metadata.age_hours),
     "helius_holders",
     warnings,
   ) ?? { total: null, top_1_pct: null, top_10_pct: null, top_20: [] };

@@ -1,12 +1,89 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
-import type { TokenAnalysis } from "@/types/token";
+import { animate } from "animejs";
+import type { TokenAnalysis, TokenMarket } from "@/types/token";
 import { humanizeNumber, humanizePrice, pctChange } from "@/lib/utils";
 
+type LivePoll = {
+  price_usd: number | null;
+  price_change_5m: number | null;
+  price_change_1h: number | null;
+  price_change_6h: number | null;
+  price_change_24h: number | null;
+  price_change_7d?: number | null;
+  volume_24h: number | null;
+  liquidity_usd: number | null;
+  market_cap: number | null;
+  fdv: number | null;
+};
+
 export function PriceCard({ analysis }: { analysis: TokenAnalysis }) {
-  const m = analysis.market;
+  // Initial market data from SSR. Polling overrides specific fields.
+  const initial = analysis.market;
+  const [live, setLive] = useState<LivePoll | null>(null);
+  const lastPriceRef = useRef<number | null>(initial.price_usd);
+  const flashRef = useRef<HTMLDivElement>(null);
+
+  // Poll /api/token/{ca}/quick every 30s. Updates price + changes + volume
+  // without rerunning the AI pipeline. When the price moves between polls,
+  // briefly flash the card border in the direction of the move so the user
+  // catches the update without staring.
+  useEffect(() => {
+    if (!analysis.metadata.ca) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const r = await fetch(`/api/token/${analysis.metadata.ca}/quick`, {
+          cache: "no-store",
+        });
+        if (!r.ok) return;
+        const data = (await r.json()) as LivePoll;
+        if (cancelled) return;
+        // Detect a price tick to flash the border.
+        const prev = lastPriceRef.current;
+        const next = data.price_usd;
+        if (prev != null && next != null && prev !== next && flashRef.current) {
+          const up = next > prev;
+          const color = up ? "rgba(20, 241, 149, 0.55)" : "rgba(255, 45, 156, 0.55)";
+          flashRef.current.style.boxShadow = `0 0 0 2px ${color}, 0 6px 18px rgba(10,10,30,0.04)`;
+          animate(flashRef.current, {
+            boxShadow: ["0 0 0 2px " + color + ", 0 6px 18px rgba(10,10,30,0.04)", "0 0 0 0px " + color + ", 0 6px 18px rgba(10,10,30,0.04)"],
+            duration: 1200,
+            ease: "out(3)",
+          });
+        }
+        lastPriceRef.current = next;
+        setLive(data);
+      } catch {
+        /* noop */
+      }
+    };
+    // Don't fire immediately, the SSR data is fresh. First poll after 30s.
+    const id = setInterval(refresh, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [analysis.metadata.ca]);
+
+  // Merge live → initial for display. Live wins where present.
+  const m: TokenMarket = useMemo(() => {
+    if (!live) return initial;
+    return {
+      ...initial,
+      price_usd: live.price_usd ?? initial.price_usd,
+      price_change_1h: live.price_change_1h ?? initial.price_change_1h,
+      price_change_24h: live.price_change_24h ?? initial.price_change_24h,
+      price_change_7d: live.price_change_7d ?? initial.price_change_7d,
+      volume_24h: live.volume_24h ?? initial.volume_24h,
+      liquidity_usd: live.liquidity_usd ?? initial.liquidity_usd,
+      market_cap: live.market_cap ?? initial.market_cap,
+      fdv: live.fdv ?? initial.fdv,
+    };
+  }, [initial, live]);
+
   const change24 = m.price_change_24h;
   const positive = (change24 ?? 0) >= 0;
 
@@ -17,11 +94,32 @@ export function PriceCard({ analysis }: { analysis: TokenAnalysis }) {
   const sparkline = useMemo(() => buildSparkline(m), [m]);
 
   return (
-    <div className="glass rounded-2xl p-5 sm:p-6 h-full flex flex-col">
+    <div
+      ref={flashRef}
+      className="glass rounded-2xl p-5 sm:p-6 h-full flex flex-col transition-shadow duration-300"
+    >
       <div className="flex items-baseline gap-3 flex-wrap">
         <div className="text-[40px] sm:text-[48px] leading-none font-semibold text-mono tracking-tight">
           {humanizePrice(m.price_usd)}
         </div>
+        {live && (
+          <span
+            className="ml-auto text-[9.5px] uppercase tracking-[0.20em] font-bold inline-flex items-center gap-1.5 text-text-muted"
+            title="Polling /api/token/{ca}/quick every 30s"
+          >
+            <span className="relative flex">
+              <span
+                className="absolute inset-0 size-1.5 rounded-full animate-ping"
+                style={{ background: "#FF2D9C" }}
+              />
+              <span
+                className="relative size-1.5 rounded-full"
+                style={{ background: "#FF2D9C" }}
+              />
+            </span>
+            Live
+          </span>
+        )}
         {change24 != null && (
           <div
             className={`text-[15px] font-medium text-mono ${

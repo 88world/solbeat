@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
-import type { PulseSnapshot } from "@/lib/pulse/snapshots";
+import {
+  detectInflections,
+  type PulseInflection,
+  type PulseSnapshot,
+} from "@/lib/pulse/snapshots";
 
 type Props = {
   snapshots: PulseSnapshot[];
@@ -26,6 +30,7 @@ export function PulseTimeline({ snapshots }: Props) {
     [snapshots],
   );
   const latest = snapshots[0];
+  const inflections = useMemo(() => detectInflections(snapshots), [snapshots]);
 
   return (
     <div className="glass rounded-2xl p-5 sm:p-6">
@@ -52,9 +57,63 @@ export function PulseTimeline({ snapshots }: Props) {
         </div>
       </div>
 
+      {inflections.length > 0 && <InflectionBanner items={inflections.slice(0, 3)} />}
+
       <TimelineChart data={data} />
 
       {data.length >= 2 && <PreviousReadings data={data} />}
+    </div>
+  );
+}
+
+function InflectionBanner({ items }: { items: PulseInflection[] }) {
+  // Pick the most attention-getting inflection by severity weight.
+  const weight: Record<PulseInflection["kind"], number> = {
+    severity_flip: 4,
+    risk_jump: 3,
+    price_swing: 3,
+    risk_drop: 2,
+    new_signal: 1,
+  };
+  const sorted = [...items].sort((a, b) => weight[b.kind] - weight[a.kind]);
+  const headline = sorted[0];
+  const rest = sorted.slice(1);
+  const color = severityColor(headline.severity);
+
+  return (
+    <div
+      className="rounded-xl px-4 py-3 mb-4"
+      style={{
+        background: `${color}0F`,
+        boxShadow: `inset 4px 0 0 ${color}`,
+      }}
+    >
+      <div className="flex items-start gap-2">
+        <span
+          className="size-1.5 rounded-full mt-[7px] shrink-0"
+          style={{ background: color }}
+        />
+        <div className="min-w-0 flex-1">
+          <div
+            className="text-[12.5px] font-semibold leading-snug"
+            style={{ color: "#0a0a1e" }}
+          >
+            {headline.text}
+          </div>
+          {rest.length > 0 && (
+            <ul className="mt-1.5 space-y-0.5">
+              {rest.map((i, idx) => (
+                <li
+                  key={idx}
+                  className="text-[11.5px] text-text-secondary leading-snug"
+                >
+                  · {i.text}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
