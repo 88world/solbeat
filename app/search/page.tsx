@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { TopNav } from "@/components/shared/TopNav";
-import { fetchTrending } from "@/lib/data/dexscreener";
+import { fetchTrending, searchBySymbol } from "@/lib/data/dexscreener";
 import { humanizeNumber, pctChange } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -11,14 +11,15 @@ type PageProps = {
 
 export default async function SearchPage({ searchParams }: PageProps) {
   const { q } = await searchParams;
-  const query = (q ?? "").toUpperCase();
+  const rawQuery = (q ?? "").trim().replace(/^\$/, "");
+  const query = rawQuery.toUpperCase();
 
-  // For v1 we filter the trending list by symbol match. A proper search would
-  // hit Birdeye's /defi/v3/search endpoint or similar.
-  const trending = await fetchTrending().catch(() => []);
+  // When the user has a query, hit DexScreener's text search directly so
+  // established tokens (BONK, WIF, JUP) resolve even though they don't crack
+  // the trending top-16 by score anymore. With no query, show trending.
   const matches = query
-    ? trending.filter((t) => t.symbol?.toUpperCase().includes(query))
-    : trending;
+    ? await searchBySymbol(rawQuery).catch(() => [])
+    : await fetchTrending().catch(() => []);
 
   return (
     <>

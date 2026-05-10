@@ -118,6 +118,59 @@ const TRENDING_FALLBACK_SEEDS = [
   "MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5", // MEW
 ];
 
+/**
+ * Symbol/name search. Hits DexScreener's text-search endpoint directly so
+ * established tokens (BONK, WIF, JUP, etc.) resolve even though they don't
+ * make the trending top-16 by score. Used by /search.
+ */
+export async function searchBySymbol(query: string): Promise<TrendingToken[]> {
+  const q = query.trim().replace(/^\$/, "");
+  if (!q) return [];
+
+  const r = await fetch(`${BASE}/latest/dex/search?q=${encodeURIComponent(q)}`, {
+    next: { revalidate: 30 },
+  })
+    .then((res) => (res.ok ? (res.json() as Promise<DexSearchResponse>) : null))
+    .catch(() => null);
+  if (!r?.pairs) return [];
+
+  const filtered = r.pairs.filter((p) => {
+    if (p.chainId !== "solana") return false;
+    if (SKIP_BASE_MINTS.has(p.baseToken.address)) return false;
+    const baseSym = (p.baseToken.symbol ?? "").toUpperCase();
+    if (SKIP_BASE_SYMBOLS.has(baseSym)) return false;
+    const quoteSym = (p.quoteToken.symbol ?? "").toUpperCase();
+    if (!ACCEPTED_QUOTES.has(quoteSym)) return false;
+    // Symbol or name has to actually contain the query, DexScreener's search
+    // is permissive and returns adjacent matches we don't want.
+    const Q = q.toUpperCase();
+    const symMatch = baseSym.includes(Q);
+    const nameMatch = (p.baseToken.name ?? "").toUpperCase().includes(Q);
+    return symMatch || nameMatch;
+  });
+
+  // Dedupe per base token, keep deepest liquidity (the "real" pool).
+  const byToken = new Map<string, DexPair>();
+  for (const p of filtered) {
+    const existing = byToken.get(p.baseToken.address);
+    if (!existing || (p.liquidity?.usd ?? 0) > (existing.liquidity?.usd ?? 0)) {
+      byToken.set(p.baseToken.address, p);
+    }
+  }
+
+  // Rank: exact-symbol matches first, then by liquidity.
+  const Q = q.toUpperCase();
+  return Array.from(byToken.values())
+    .sort((a, b) => {
+      const aExact = (a.baseToken.symbol ?? "").toUpperCase() === Q ? 1 : 0;
+      const bExact = (b.baseToken.symbol ?? "").toUpperCase() === Q ? 1 : 0;
+      if (aExact !== bExact) return bExact - aExact;
+      return (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0);
+    })
+    .slice(0, 20)
+    .map((p) => mapPairToToken(p));
+}
+
 export async function fetchTrending(): Promise<TrendingToken[]> {
   const pairs = await collectSolanaPairs();
   const ranked = pairs
