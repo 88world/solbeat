@@ -11,6 +11,7 @@ import { readPulseHistory } from "@/lib/pulse/snapshots";
 import type { TokenAnalysis } from "@/types/token";
 import { TopNav } from "@/components/shared/TopNav";
 import { CursorBlob } from "@/components/shared/CursorBlob";
+import { Aurora } from "@/components/shared/Aurora";
 import { EntranceStagger } from "@/components/shared/EntranceStagger";
 import { TokenHeader } from "@/components/token/TokenHeader";
 import { PriceCard } from "@/components/token/PriceCard";
@@ -152,6 +153,7 @@ export default async function TokenPage({ params }: PageProps) {
       className="relative flex flex-col min-h-screen"
       style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}
     >
+      <Aurora />
       <CursorBlob />
       <TopNav />
       <main className="relative z-10 flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pb-24">

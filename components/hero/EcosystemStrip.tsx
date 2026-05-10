@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 import { animate, stagger } from "animejs";
 import { humanizeNumber } from "@/lib/utils";
+import { TiltCard } from "@/components/shared/TiltCard";
 import type { NetworkSnapshot } from "@/lib/data/network";
 import type { SolanaDefiSnapshot } from "@/lib/data/defillama";
 import type { SolanaNFTSnapshot } from "@/lib/data/magiceden";
@@ -58,10 +59,10 @@ export function EcosystemStrip() {
     enteredRef.current = true;
     const cards = gridRef.current.querySelectorAll("[data-eco-card]");
     if (cards.length === 0) return;
+    // Just opacity, no translateY/scale here, those would fight the
+    // TiltCard's own perspective transform on the wrapper.
     animate(cards, {
-      translateY: [16, 0],
       opacity: [0, 1],
-      scale: [0.97, 1],
       duration: 700,
       delay: stagger(90),
       ease: "out(3)",
@@ -135,46 +136,49 @@ function CardShell({
   accent?: string;
 }) {
   const glow = accent ?? "rgba(94, 92, 255, 0.45)";
+  const spotlight = accent ?? "rgba(255, 45, 156, 0.18)";
   return (
-    <div
-      data-eco-card
-      className="rounded-2xl px-4 sm:px-5 py-4 relative overflow-hidden group transition-transform duration-300 hover:-translate-y-0.5"
-      style={{
-        background: "rgba(255, 255, 255, 0.65)",
-        backdropFilter: "blur(20px) saturate(160%)",
-        WebkitBackdropFilter: "blur(20px) saturate(160%)",
-        border: "1px solid rgba(10, 10, 30, 0.06)",
-        boxShadow: "0 6px 18px rgba(10, 10, 30, 0.04)",
-        opacity: 0, // anime.js fades in
-      }}
+    <TiltCard
+      intensity={6}
+      smoothing={0.14}
+      spotlightColor={spotlight}
+      className="overflow-hidden"
     >
-      {/* Soft corner glow that intensifies on hover. Pure CSS, no JS cost. */}
       <div
-        aria-hidden
-        className="absolute -top-12 -right-12 size-32 rounded-full pointer-events-none transition-opacity duration-500 opacity-50 group-hover:opacity-100"
-        style={{
-          background: `radial-gradient(circle, ${glow} 0%, transparent 70%)`,
-          filter: "blur(8px)",
-        }}
-      />
-      <div className="flex items-center justify-between mb-2 relative">
-        <div className="text-[9.5px] uppercase tracking-[0.20em] text-text-muted font-bold">
-          {label}
-        </div>
-        {delta != null && (
-          <div
-            className="text-[10.5px] font-semibold text-mono"
-            style={{ color: deltaColor }}
-          >
-            {delta}
+        data-eco-card
+        className="px-4 sm:px-5 py-4 relative"
+        style={{ opacity: 0 }}
+      >
+        {/* Soft corner glow that intensifies on hover. */}
+        <div
+          aria-hidden
+          className="absolute -top-12 -right-12 size-32 rounded-full pointer-events-none"
+          style={{
+            background: `radial-gradient(circle, ${glow} 0%, transparent 70%)`,
+            filter: "blur(8px)",
+            opacity: "calc(0.5 + var(--inside, 0) * 0.5)",
+            transition: "opacity 400ms ease-out",
+          }}
+        />
+        <div className="flex items-center justify-between mb-2 relative">
+          <div className="text-[9.5px] uppercase tracking-[0.20em] text-text-muted font-bold">
+            {label}
           </div>
-        )}
+          {delta != null && (
+            <div
+              className="text-[10.5px] font-semibold text-mono"
+              style={{ color: deltaColor }}
+            >
+              {delta}
+            </div>
+          )}
+        </div>
+        <div className="text-[20px] sm:text-[22px] leading-tight font-semibold text-mono tracking-tight relative">
+          {value}
+        </div>
+        {children}
       </div>
-      <div className="text-[20px] sm:text-[22px] leading-tight font-semibold text-mono tracking-tight relative">
-        {value}
-      </div>
-      {children}
-    </div>
+    </TiltCard>
   );
 }
 

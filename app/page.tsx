@@ -2,6 +2,7 @@ import { TopNav } from "@/components/shared/TopNav";
 import { Hero } from "@/components/hero/Hero";
 import { EcosystemStrip } from "@/components/hero/EcosystemStrip";
 import { CursorBlob } from "@/components/shared/CursorBlob";
+import { Aurora } from "@/components/shared/Aurora";
 
 export default function Home() {
   return (
@@ -10,9 +11,10 @@ export default function Home() {
       className="relative flex flex-col min-h-screen"
       style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}
     >
-      {/* Cursor-following ambient blob behind the content. Reads as
-          atmosphere; gives the page a subtle "warmth follows you" feel
-          you can't look at directly but instantly notice if removed. */}
+      {/* Layered ambient backdrop. Aurora is the slow drift in the back,
+          CursorBlob follows the mouse. Both behind a z-0 so content stays
+          on top via z-10 on main. */}
+      <Aurora />
       <CursorBlob />
       <TopNav />
       <main className="relative flex-1 flex flex-col z-10">
