@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
+import { animate, stagger } from "animejs";
 import { humanizeNumber } from "@/lib/utils";
 import type { NetworkSnapshot } from "@/lib/data/network";
 import type { SolanaDefiSnapshot } from "@/lib/data/defillama";
@@ -27,6 +28,8 @@ type EcosystemPayload = {
  */
 export function EcosystemStrip() {
   const [data, setData] = useState<EcosystemPayload | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const enteredRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,8 +51,25 @@ export function EcosystemStrip() {
     };
   }, []);
 
+  // anime.js stagger entrance, fires once after the first data load. Each
+  // card lifts and fades in 100ms behind the one before it.
+  useEffect(() => {
+    if (!data || enteredRef.current || !gridRef.current) return;
+    enteredRef.current = true;
+    const cards = gridRef.current.querySelectorAll("[data-eco-card]");
+    if (cards.length === 0) return;
+    animate(cards, {
+      translateY: [16, 0],
+      opacity: [0, 1],
+      scale: [0.97, 1],
+      duration: 700,
+      delay: stagger(90),
+      ease: "out(3)",
+    });
+  }, [data]);
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+    <div ref={gridRef} className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
       <SolCard sol={data?.sol ?? null} />
       <NetworkCard network={data?.network ?? null} />
       <DefiCard defi={data?.defi ?? null} />
@@ -58,31 +78,86 @@ export function EcosystemStrip() {
   );
 }
 
+/**
+ * Animated count-up. anime.js tweens a plain object's value from 0 to target,
+ * we mirror it into the DOM via a ref. 1.4s outExpo feels punchy without
+ * rolling forever. When `value` changes, restart from current displayed
+ * value so updates feel like the number "ticking up" instead of resetting.
+ */
+function CountUp({
+  value,
+  format,
+  duration = 1400,
+}: {
+  value: number;
+  format: (n: number) => string;
+  duration?: number;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const lastDisplayedRef = useRef(0);
+
+  useEffect(() => {
+    if (!ref.current || !Number.isFinite(value)) return;
+    const target = value;
+    const start = lastDisplayedRef.current;
+    const obj = { v: start };
+    const a = animate(obj, {
+      v: target,
+      duration,
+      ease: "out(4)",
+      onUpdate: () => {
+        if (ref.current) ref.current.textContent = format(obj.v);
+        lastDisplayedRef.current = obj.v;
+      },
+    });
+    return () => {
+      a.pause();
+    };
+  }, [value, format, duration]);
+
+  return <span ref={ref}>{format(0)}</span>;
+}
+
 function CardShell({
   label,
   value,
   delta,
   deltaColor,
   children,
+  accent,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   delta?: string;
   deltaColor?: string;
   children?: React.ReactNode;
+  /** Accent color for the corner glow + hover ring. */
+  accent?: string;
 }) {
+  const glow = accent ?? "rgba(94, 92, 255, 0.45)";
   return (
     <div
-      className="rounded-2xl px-4 sm:px-5 py-4 relative overflow-hidden"
+      data-eco-card
+      className="rounded-2xl px-4 sm:px-5 py-4 relative overflow-hidden group transition-transform duration-300 hover:-translate-y-0.5"
       style={{
         background: "rgba(255, 255, 255, 0.65)",
         backdropFilter: "blur(20px) saturate(160%)",
         WebkitBackdropFilter: "blur(20px) saturate(160%)",
         border: "1px solid rgba(10, 10, 30, 0.06)",
         boxShadow: "0 6px 18px rgba(10, 10, 30, 0.04)",
+        opacity: 0, // anime.js fades in
       }}
     >
-      <div className="flex items-center justify-between mb-2">
+      {/* Soft corner glow that intensifies on hover. Pure CSS, no JS cost. */}
+      <div
+        aria-hidden
+        className="absolute -top-12 -right-12 size-32 rounded-full pointer-events-none transition-opacity duration-500 opacity-50 group-hover:opacity-100"
+        style={{
+          background: `radial-gradient(circle, ${glow} 0%, transparent 70%)`,
+          filter: "blur(8px)",
+        }}
+      />
+      <div className="flex items-center justify-between mb-2 relative">
         <div className="text-[9.5px] uppercase tracking-[0.20em] text-text-muted font-bold">
           {label}
         </div>
@@ -95,7 +170,7 @@ function CardShell({
           </div>
         )}
       </div>
-      <div className="text-[20px] sm:text-[22px] leading-tight font-semibold text-mono tracking-tight">
+      <div className="text-[20px] sm:text-[22px] leading-tight font-semibold text-mono tracking-tight relative">
         {value}
       </div>
       {children}
@@ -109,7 +184,16 @@ function SolCard({ sol }: { sol: SolMacro | null }) {
   return (
     <CardShell
       label="SOL"
-      value={sol.price_usd != null ? `$${formatPrice(sol.price_usd)}` : "—"}
+      accent="rgba(20, 241, 149, 0.45)"
+      value={
+        sol.price_usd != null ? (
+          <>
+            $<CountUp value={sol.price_usd} format={formatPrice} />
+          </>
+        ) : (
+          "—"
+        )
+      }
       delta={
         sol.price_change_24h != null
           ? `${positive ? "+" : ""}${sol.price_change_24h.toFixed(1)}%`
@@ -130,7 +214,13 @@ function NetworkCard({ network }: { network: NetworkSnapshot | null }) {
   return (
     <CardShell
       label="Network · TPS"
-      value={tps.toLocaleString("en-US")}
+      accent="rgba(94, 92, 255, 0.45)"
+      value={
+        <CountUp
+          value={tps}
+          format={(n) => Math.round(n).toLocaleString("en-US")}
+        />
+      }
       delta={`epoch ${network.epoch}`}
       deltaColor="#5a5a70"
     >
@@ -150,7 +240,14 @@ function DefiCard({ defi }: { defi: SolanaDefiSnapshot | null }) {
   return (
     <CardShell
       label="DeFi · TVL"
-      value={`$${humanizeNumber(defi.totalTvl)}`}
+      accent={
+        positive ? "rgba(20, 241, 149, 0.45)" : "rgba(255, 45, 156, 0.45)"
+      }
+      value={
+        <>
+          $<CountUp value={defi.totalTvl} format={(n) => humanizeNumber(n)} />
+        </>
+      }
       delta={`${positive ? "+" : ""}${defi.change_24h.toFixed(2)}%`}
       deltaColor={positive ? "#0a8f57" : "#c1374a"}
     >
@@ -176,7 +273,20 @@ function NFTCard({ nft }: { nft: SolanaNFTSnapshot | null }) {
   return (
     <CardShell
       label={`NFT · top ${nft.collections.length}`}
-      value={cheapest?.floor_sol != null ? `${cheapest.floor_sol.toFixed(2)} ◎` : "—"}
+      accent="rgba(255, 45, 156, 0.45)"
+      value={
+        cheapest?.floor_sol != null ? (
+          <>
+            <CountUp
+              value={cheapest.floor_sol}
+              format={(n) => n.toFixed(2)}
+            />
+            <span className="ml-1">◎</span>
+          </>
+        ) : (
+          "—"
+        )
+      }
       delta={`${totalListed.toLocaleString("en-US")} listed`}
       deltaColor="#5a5a70"
     >

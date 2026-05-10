@@ -7,6 +7,7 @@ import { TrendingList } from "./TrendingList";
 import { CaPasteBox } from "./CaPasteBox";
 import { MarketPulse } from "./MarketPulse";
 import { LiveChart } from "./LiveChart";
+import { TickerTape } from "./TickerTape";
 import {
   computeHeatSnapshot,
   heatToBpm,
@@ -107,7 +108,7 @@ export function Hero() {
     <section
       ref={heroRef}
       className="relative w-full overflow-hidden"
-      style={{ minHeight: "calc(100svh - 64px)", maxHeight: "calc(100svh - 64px)" }}
+      style={{ minHeight: "calc(100svh - 64px)" }}
     >
       <div className="absolute inset-0 dot-grid pointer-events-none" aria-hidden />
 
@@ -162,9 +163,10 @@ export function Hero() {
           </div>
         </div>
 
-        {/* BOTTOM, live chart spanning full width */}
-        <div data-fade-up className="hidden lg:block">
+        {/* BOTTOM, live chart + scrolling ticker */}
+        <div data-fade-up className="hidden lg:block space-y-3">
           <LiveChart tokens={tokens} limit={5} />
+          <TickerTape tokens={tokens} />
         </div>
 
         {/* Mobile stack: pulse, trending, chart below the sphere */}
@@ -174,6 +176,7 @@ export function Hero() {
         >
           <MarketPulse pulse={snapshot} />
           <LiveChart tokens={tokens} limit={5} />
+          <TickerTape tokens={tokens} />
           <TrendingList limit={4} heat={heat} tokens={tokens} />
         </div>
       </div>
