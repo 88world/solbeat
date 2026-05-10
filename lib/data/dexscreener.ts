@@ -304,6 +304,69 @@ async function collectSolanaPairs(): Promise<DexPair[]> {
   return Array.from(byToken.values());
 }
 
+/**
+ * "Tokens to Watch" — recently-graduated pump.fun tokens in the post-launch
+ * survival zone (24h-14d old, $500K-$1.5M mcap), filtered for healthy
+ * buying pressure and real liquidity. This is THE degen scan: the band
+ * between "just escaped pump.fun" and "stale, missed it." 99% of pump
+ * tokens rug within 24h of graduation, the ones that survive into this
+ * mcap range with buyers in control are the ones that actually run.
+ *
+ * Filter (each is from the trader-checklist research):
+ *   mcap          $500k–$1.5m         (post-graduation, pre-stale)
+ *   age           24h–14d              (survived early dump, not exhausted)
+ *   liquidity     >= $50k              (real LP, not wash)
+ *   24h volume    >= $100k             (actually being traded)
+ *   buy_share     >= 0.45              (buyers in control)
+ *
+ * Ranking: score = (volume/liquidity) × buy_share × log10(mcap+1)
+ * — favors active, buyer-led pools at higher mcaps within the band.
+ */
+export async function fetchWatchTokens(): Promise<TrendingToken[]> {
+  const pairs = await collectSolanaPairs();
+  const filtered = pairs.filter((p) => {
+    const mcap = p.marketCap ?? p.fdv ?? 0;
+    if (mcap < 500_000 || mcap > 1_500_000) return false;
+
+    const ageMs = p.pairCreatedAt ? Date.now() - p.pairCreatedAt : 0;
+    const ageH = ageMs / 3_600_000;
+    if (ageH < 24 || ageH > 24 * 14) return false;
+
+    const liq = p.liquidity?.usd ?? 0;
+    if (liq < 50_000) return false;
+
+    const vol = p.volume?.h24 ?? 0;
+    if (vol < 100_000) return false;
+
+    const txns = p.txns?.h24;
+    if (!txns) return false;
+    const total = (txns.buys ?? 0) + (txns.sells ?? 0);
+    if (total === 0) return false;
+    const buyShare = (txns.buys ?? 0) / total;
+    if (buyShare < 0.45) return false;
+
+    return true;
+  });
+
+  // Score by activity + buy-led + mcap-within-band.
+  const scored = filtered.map((p) => {
+    const mcap = p.marketCap ?? p.fdv ?? 0;
+    const liq = p.liquidity?.usd ?? 0;
+    const vol = p.volume?.h24 ?? 0;
+    const t = p.txns?.h24;
+    const total = (t?.buys ?? 0) + (t?.sells ?? 0);
+    const buyShare = total > 0 ? (t?.buys ?? 0) / total : 0;
+    const vlr = liq > 0 ? vol / liq : 0;
+    const score = vlr * buyShare * Math.log10(mcap + 1);
+    return { p, score };
+  });
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map((x) => mapPairToToken(x.p));
+}
+
 /** Wider trending fetch for the leaderboard page, same trending-score ranking, more results. */
 export async function fetchTrendingFull(limit = 50): Promise<TrendingToken[]> {
   const pairs = await collectSolanaPairs();

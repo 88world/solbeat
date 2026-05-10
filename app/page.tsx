@@ -1,6 +1,7 @@
 import { TopNav } from "@/components/shared/TopNav";
 import { Hero } from "@/components/hero/Hero";
 import { EcosystemStrip } from "@/components/hero/EcosystemStrip";
+import { TokensToWatch } from "@/components/hero/TokensToWatch";
 import { CursorBlob } from "@/components/shared/CursorBlob";
 import { Aurora } from "@/components/shared/Aurora";
 import { ScrollReveal } from "@/components/shared/ScrollReveal";
@@ -42,6 +43,18 @@ export default function Home() {
             </span>
           </header>
           <EcosystemStrip />
+        </ScrollReveal>
+
+        {/* Tokens to Watch — the differentiator math. Recently-graduated
+            pump.fun tokens in the post-launch survival band that have
+            healthy buy pressure. Where alpha exists before the herd. */}
+        <ScrollReveal
+          className="mx-auto max-w-[1320px] w-full px-5 lg:px-8 py-4 lg:py-6"
+          childSelector=":scope > *"
+          step={80}
+          travel={28}
+        >
+          <TokensToWatch />
         </ScrollReveal>
       </main>
       <footer className="px-6 pb-5 pt-2 text-center text-[11px] text-text-muted">

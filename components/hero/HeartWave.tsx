@@ -145,20 +145,22 @@ export function HeartWave({
       // Per-component contributions.
       // Each component contributes amplitude × sin(ωx + φt). Periods picked
       // so they don't beat in resonance, the silhouette evolves continuously.
-      const solAmp = sSol * baseAmp * 0.85; // slow, big
-      const breadthAmp = sBreadth * baseAmp * 0.55; // mid
-      const volAmp = sVol * baseAmp * 0.30; // fast, small
-      const heatBoost = 0.6 + sH * 0.6; // 0.6..1.2x global multiplier
-      const speed = 0.5 + sH * 1.6; // 0.5..2.1 phase rate (rad/s)
+      // Phase rates bumped 2× from the first version — the wave was drifting
+      // too slowly to read as alive.
+      const solAmp = sSol * baseAmp * 0.85;
+      const breadthAmp = sBreadth * baseAmp * 0.55;
+      const volAmp = sVol * baseAmp * 0.30;
+      const heatBoost = 0.6 + sH * 0.6;
+      const speed = 1.2 + sH * 2.0; // 1.2..3.2 — fast enough to read as motion
 
       for (let i = 0; i <= SAMPLES; i++) {
         const u = i / SAMPLES;
         const x = xScale(u);
 
         // Wavelengths in radians: long, mid, short.
-        const solWave = Math.sin(u * 4.0 * Math.PI - t * 0.7 * speed) * solAmp;
-        const breadthWave = Math.sin(u * 9.5 * Math.PI - t * 1.6 * speed) * breadthAmp;
-        const volWave = Math.sin(u * 22 * Math.PI - t * 3.2 * speed) * volAmp;
+        const solWave = Math.sin(u * 4.0 * Math.PI - t * 1.4 * speed) * solAmp;
+        const breadthWave = Math.sin(u * 9.5 * Math.PI - t * 2.5 * speed) * breadthAmp;
+        const volWave = Math.sin(u * 22 * Math.PI - t * 4.8 * speed) * volAmp;
 
         // Extreme spikes: a tight gaussian bump that slides leftward, only
         // visible at moderate-to-high extreme. Rare and sharp.

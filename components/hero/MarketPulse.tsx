@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { animate } from "animejs";
 import type { HeatSnapshot } from "@/lib/utils/heat";
 import { heatToBpm, heatLabel } from "@/lib/utils/heat";
@@ -256,7 +257,11 @@ function Mover({
   const change = token.price_change_24h ?? 0;
   const changeColor = positive ? "text-signal-positive" : "text-signal-negative";
   return (
-    <div className="flex items-center gap-1.5 min-w-0">
+    <Link
+      href={`/token/${token.ca}`}
+      className="flex items-center gap-1.5 min-w-0 hover:opacity-80 transition-opacity"
+      title={`Open ${symbol} on SolBeat`}
+    >
       <span className={`text-[10px] font-bold ${changeColor}`} aria-hidden>
         {positive ? "▲" : "▼"}
       </span>
@@ -266,7 +271,7 @@ function Mover({
       <span className={`text-mono text-[11px] ml-auto font-semibold ${changeColor}`}>
         {pctChange(change)}
       </span>
-    </div>
+    </Link>
   );
 }
 
@@ -301,10 +306,16 @@ function HeatWaveDisplay({ pulse }: { pulse: HeatSnapshot }) {
     <div className="rounded-xl bg-text-muted/[0.03] border border-border-subtle px-3 py-2.5 mb-3">
       <div className="flex items-center justify-between mb-1">
         <span className="text-[9px] uppercase tracking-[0.20em] text-text-muted font-bold">
-          What's driving it
+          Why this BPM
         </span>
         <span className="text-[8.5px] uppercase tracking-[0.20em] text-text-muted font-mono">
-          live waveform
+          {pulse.heat > 0.85
+            ? "everything pumping"
+            : pulse.heat > 0.65
+              ? "broad rip"
+              : pulse.heat > 0.4
+                ? "selective heat"
+                : "quiet"}
         </span>
       </div>
       <div className="-mx-1">
@@ -320,28 +331,28 @@ function HeatWaveDisplay({ pulse }: { pulse: HeatSnapshot }) {
       </div>
       <div className="grid grid-cols-4 gap-1 mt-1.5">
         <WaveLegend
-          label="SOL"
+          label="$SOL move"
           value={solComponent}
           color="#14F195"
-          weight={40}
+          tooltip="How much SOL itself is moving in the last 24h. The whole ecosystem follows this."
         />
         <WaveLegend
-          label="Breadth"
+          label="Tokens up"
           value={pulse.breakdown.breadth}
           color="#5e5cff"
-          weight={30}
+          tooltip="Fraction of the trending list with meaningful 24h moves (>15%). 100 = everything's moving."
         />
         <WaveLegend
-          label="Volume"
+          label="$ flowing"
           value={pulse.breakdown.volume}
           color="#FFB938"
-          weight={20}
+          tooltip="Log-scaled total trending volume vs $1B reference. 100 = market firing."
         />
         <WaveLegend
-          label="Extreme"
+          label="Parabolic"
           value={extreme}
           color="#FF2D9C"
-          weight={10}
+          tooltip="Count of fresh launches doing >500% moves. Hard-capped, extreme can't carry the read alone."
         />
       </div>
     </div>
@@ -352,17 +363,17 @@ function WaveLegend({
   label,
   value,
   color,
-  weight,
+  tooltip,
 }: {
   label: string;
   value: number;
   color: string;
-  weight: number;
+  tooltip: string;
 }) {
   return (
     <div
-      className="flex flex-col items-start gap-0.5"
-      title={`${label} contributes ${weight}% of heat (current value: ${(value * 100).toFixed(0)})`}
+      className="flex flex-col items-start gap-0.5 cursor-help"
+      title={tooltip}
     >
       <div className="flex items-center gap-1">
         <span className="size-1.5 rounded-full" style={{ background: color }} />
@@ -372,12 +383,11 @@ function WaveLegend({
       </div>
       <div className="flex items-baseline gap-1 leading-none">
         <span
-          className="text-[12px] font-mono font-bold tabular-nums"
+          className="text-[14px] font-mono font-bold tabular-nums"
           style={{ color }}
         >
           {Math.round(value * 100)}
         </span>
-        <span className="text-[8px] text-text-muted font-mono">·{weight}%</span>
       </div>
     </div>
   );
