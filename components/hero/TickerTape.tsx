@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { animate } from "animejs";
 import type { TrendingToken } from "@/types/token";
-import { humanizePrice } from "@/lib/utils";
+import { humanizeNumber } from "@/lib/utils";
 
 /**
  * Stock-ticker-style scrolling marquee. Pure anime.js for the infinite scroll
@@ -157,8 +157,13 @@ function TickerItem({ token }: { token: TrendingToken }) {
       <span className="text-[13px] font-bold tracking-tight text-text-primary group-hover:text-accent-pulse transition">
         ${symbol}
       </span>
+      {/* Market cap, what degens actually scan for. Falls back to FDV
+          when self-reported mcap is missing (most fresh launches). */}
       <span className="text-[12.5px] font-mono text-text-secondary">
-        {humanizePrice(token.price_usd)}
+        ${humanizeNumber(token.market_cap ?? token.fdv ?? 0)}
+        <span className="ml-1 text-[9px] uppercase tracking-[0.14em] text-text-muted font-bold">
+          mc
+        </span>
       </span>
       <span
         className="text-[12px] font-semibold font-mono"
