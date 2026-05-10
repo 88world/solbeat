@@ -54,15 +54,24 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
       const el = bpmRef.current;
       if (el) {
         // anime.js text-shadow flash. Brief brightening then back to baseline.
+        // Up-tick (heat increased) flashes pink; down-tick flashes indigo.
         const direction = pulse.heat > prev ? "up" : "down";
         const flashColor = direction === "up" ? "#FF2D9C" : "#5e5cff";
+        // Pulse magnitude scales with how big the heat jump was: a +0.1
+        // jump is a real surge (and a sharper scale-pop), a +0.005 nudge
+        // is just polling jitter and stays small.
+        const jump = Math.min(1, Math.abs(pulse.heat - prev) / 0.1);
+        const peakScale = 1 + 0.035 * jump;
         animate(el, {
           textShadow: [
             `0 0 0px ${flashColor}00, 0 0 0px ${flashColor}00`,
             `0 0 28px ${flashColor}cc, 0 0 6px ${flashColor}aa`,
             `0 0 24px ${flashColor}33, 0 0 4px ${flashColor}55`,
           ],
-          duration: 800,
+          // Quick punch up, slow settle back. The number "breathes" on
+          // each meaningful market update without ever looking jittery.
+          scale: [1, peakScale, 1],
+          duration: 760,
           ease: "out(3)",
         });
       }
@@ -151,6 +160,11 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
               color: labelColor,
               textShadow: `0 0 24px ${labelColor}33, 0 0 4px ${labelColor}55`,
               letterSpacing: "-0.04em",
+              // inline-block so the anime.js scale transform applies; bottom
+              // origin keeps the baseline planted so the BPM label below
+              // doesn't bob on each pop.
+              display: "inline-block",
+              transformOrigin: "left bottom",
             }}
           >
             {bpm}

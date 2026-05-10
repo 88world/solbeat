@@ -100,7 +100,7 @@ export function PriceCard({ analysis }: { analysis: TokenAnalysis }) {
     >
       <div className="flex items-baseline gap-3 flex-wrap">
         <div className="text-[40px] sm:text-[48px] leading-none font-semibold text-mono tracking-tight">
-          {humanizePrice(m.price_usd)}
+          <PriceCountUp value={m.price_usd} />
         </div>
         {live && (
           <span
@@ -166,6 +166,51 @@ export function PriceCard({ analysis }: { analysis: TokenAnalysis }) {
       </div>
     </div>
   );
+}
+
+/**
+ * Smooth count-up between price values. We don't restart from zero, we tween
+ * from the *previously displayed* number to the new target, so a sequence of
+ * polls looks like the digits ticking up/down in place rather than blinking.
+ * Duration is short (520ms) — long enough to be readable, fast enough that a
+ * 30s poll cadence doesn't have stale tweens overlapping the next print.
+ *
+ * Falls back to the static formatted value when `value` is null or NaN.
+ */
+function PriceCountUp({ value }: { value: number | null }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const lastRef = useRef<number | null>(value);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (value == null || !Number.isFinite(value)) {
+      ref.current.textContent = humanizePrice(value);
+      lastRef.current = value;
+      return;
+    }
+    const start = lastRef.current ?? value;
+    // Skip the tween on the very first render — feels jarring to animate
+    // from the same value, and we'd otherwise burn a frame.
+    if (start === value) {
+      ref.current.textContent = humanizePrice(value);
+      return;
+    }
+    const obj = { v: start };
+    const a = animate(obj, {
+      v: value,
+      duration: 520,
+      ease: "out(3)",
+      onUpdate: () => {
+        if (ref.current) ref.current.textContent = humanizePrice(obj.v);
+      },
+    });
+    lastRef.current = value;
+    return () => {
+      a.pause();
+    };
+  }, [value]);
+
+  return <span ref={ref}>{humanizePrice(value)}</span>;
 }
 
 function PriceSparkline({

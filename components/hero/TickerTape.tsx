@@ -18,12 +18,24 @@ import { humanizeNumber } from "@/lib/utils";
  */
 export function TickerTape({
   tokens,
-  speedMs = 50_000,
+  speedMs,
+  heat = 0,
 }: {
   tokens: TrendingToken[];
-  /** Time to scroll one full set (lower = faster). */
+  /**
+   * Override the auto-computed speed. Leave undefined to derive from heat:
+   * slower when the market is quiet (60s/loop), faster when everything is
+   * pumping (28s/loop). Lower number = faster scroll.
+   */
   speedMs?: number;
+  /** 0..1 heat score. Higher heat = faster scroll, more "the floor is alive". */
+  heat?: number;
 }) {
+  // Heat-driven cadence. At heat=0 the ticker drifts at a calm 60s/loop;
+  // at heat=1 it's at 28s/loop, fast enough to feel hectic without
+  // becoming unreadable. Explicit `speedMs` override wins so callers can
+  // still pin a speed if they want.
+  const resolvedSpeed = speedMs ?? Math.round(60_000 - Math.min(1, heat) * 32_000);
   const trackRef = useRef<HTMLDivElement>(null);
   const setRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<{ pause: () => void; play: () => void } | null>(null);
@@ -51,7 +63,7 @@ export function TickerTape({
       // -setWidth means the second set lands EXACTLY where the first
       // started, then we loop and continue.
       translateX: () => [`0px`, `${-setWidth}px`],
-      duration: speedMs,
+      duration: resolvedSpeed,
       ease: "linear",
       loop: true,
     });
@@ -64,7 +76,7 @@ export function TickerTape({
       a.pause();
       ro.disconnect();
     };
-  }, [tokens.length, speedMs]);
+  }, [tokens.length, resolvedSpeed]);
 
   if (tokens.length === 0) return null;
 

@@ -17,9 +17,16 @@ import { humanizeNumber } from "@/lib/utils";
  * shows you "trending" (whatever's hot RIGHT NOW). We show you what's
  * about to be trending — the band where alpha exists before the herd.
  */
+const REFRESH_MS = 30_000;
+
 export function TokensToWatch() {
   const [tokens, setTokens] = useState<TrendingToken[]>([]);
   const [loading, setLoading] = useState(true);
+  // Wall-clock of the last successful refresh so the countdown ring can
+  // draw based on elapsed time rather than a separately-ticking counter
+  // that could drift out of sync with the actual fetch cadence.
+  const [lastRefresh, setLastRefresh] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -31,17 +38,29 @@ export function TokensToWatch() {
         if (cancelled) return;
         setTokens(json.tokens ?? []);
         setLoading(false);
+        setLastRefresh(Date.now());
       } catch {
         if (!cancelled) setLoading(false);
       }
     };
     refresh();
-    const id = setInterval(refresh, 30_000);
+    const id = setInterval(refresh, REFRESH_MS);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
   }, []);
+
+  // Tick once per second to drive the countdown. Cheap, doesn't trigger
+  // network or AnimatePresence re-flow, only this header re-renders.
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const elapsed = Math.min(REFRESH_MS, nowMs - lastRefresh);
+  const secondsToNext = Math.max(0, Math.ceil((REFRESH_MS - elapsed) / 1000));
+  const progress = elapsed / REFRESH_MS; // 0..1
 
   return (
     <div
@@ -65,9 +84,10 @@ export function TokensToWatch() {
             <span className="text-mono">≥45% buy share</span>
           </p>
         </div>
-        <span className="text-[10px] uppercase tracking-[0.20em] text-text-muted font-bold">
-          alpha · 30s
-        </span>
+        <RefreshIndicator
+          progress={progress}
+          secondsToNext={secondsToNext}
+        />
       </div>
 
       {loading ? (
@@ -87,6 +107,67 @@ export function TokensToWatch() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Tiny SVG ring that fills clockwise as the refresh interval elapses.
+ * When ≤3s remain, the dot pulses pink so a glance reads "about to update";
+ * the rest of the time it stays muted so it doesn't compete with the data.
+ */
+function RefreshIndicator({
+  progress,
+  secondsToNext,
+}: {
+  progress: number;
+  secondsToNext: number;
+}) {
+  const r = 6.5;
+  const c = 2 * Math.PI * r;
+  const dashOffset = c * (1 - Math.min(1, progress));
+  const imminent = secondsToNext <= 3;
+  const stroke = imminent ? "#FF2D9C" : "#8a8a9e";
+  const label = imminent ? `refreshing in ${secondsToNext}s` : `alpha · ${secondsToNext}s`;
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <svg
+        width={18}
+        height={18}
+        viewBox="0 0 18 18"
+        className={imminent ? "animate-pulse" : undefined}
+        aria-hidden
+      >
+        <circle
+          cx="9"
+          cy="9"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeOpacity={0.18}
+          strokeWidth={1.4}
+        />
+        <circle
+          cx="9"
+          cy="9"
+          r={r}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={1.6}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={dashOffset}
+          transform="rotate(-90 9 9)"
+          style={{ transition: "stroke-dashoffset 0.9s linear, stroke 250ms ease" }}
+        />
+      </svg>
+      <span
+        className="text-[10px] uppercase tracking-[0.18em] font-bold tabular-nums"
+        style={{ color: imminent ? "#FF2D9C" : undefined }}
+      >
+        {label}
+      </span>
+    </span>
   );
 }
 

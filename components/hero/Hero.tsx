@@ -187,7 +187,7 @@ export function Hero() {
         {/* BOTTOM, live chart + scrolling ticker */}
         <div data-fade-up className="hidden lg:block space-y-3">
           <LiveChart tokens={tokens} limit={5} />
-          <TickerTape tokens={tokens} />
+          <TickerTape tokens={tokens} heat={heat} />
         </div>
 
         {/* Mobile stack: pulse, trending, chart below the sphere */}
@@ -197,7 +197,7 @@ export function Hero() {
         >
           <MarketPulse pulse={snapshot} />
           <LiveChart tokens={tokens} limit={5} />
-          <TickerTape tokens={tokens} />
+          <TickerTape tokens={tokens} heat={heat} />
           <TrendingList limit={4} heat={heat} tokens={tokens} />
         </div>
       </div>

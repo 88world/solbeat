@@ -81,7 +81,11 @@ export function BuySellPressure({ analysis }: Props) {
 
   const m: LiveMarket = live ?? analysis.market;
 
-  const stats = computeStats(m, tab);
+  // Pass the current market cap through so the thin-sample threshold can
+  // scale: a billion-dollar token with 30 trades/hour is dead; a fresh
+  // 200K-cap pump.fun launch with 30 trades/hour is normal flow. Same
+  // raw count means very different things at different scales.
+  const stats = computeStats(m, tab, analysis.market.market_cap ?? null);
 
   if (!stats) {
     return (
@@ -316,6 +320,7 @@ function PressureBar({
 function computeStats(
   m: LiveMarket,
   tab: "5m" | "1h" | "6h" | "24h",
+  marketCap: number | null,
 ): {
   buys: number;
   sells: number;
@@ -358,10 +363,19 @@ function computeStats(
   // This is flagged as "≈" in the UI so users know it's projected.
   const buyDollars = vol * buyShare;
   const sellDollars = vol - buyDollars;
-  // Thin-sample threshold: scale by timeframe so 24h needs more txns
-  // than 5m before a verdict is statistically meaningful.
-  const thinThreshold =
+  // Thin-sample threshold: scale by timeframe AND market cap. The
+  // baseline assumes a small-cap (~$1M) with active flow. A $1B token
+  // has 1000x more eyes and many more bots → expect proportionally more
+  // trades before the same %-imbalance is meaningful. Capped at 5x so we
+  // don't demand 500 trades on a quiet 1h window for blue chips.
+  const base =
     tab === "5m" ? 5 : tab === "1h" ? 20 : tab === "6h" ? 60 : 100;
+  const mcap = Math.max(1, marketCap ?? 1_000_000);
+  // log-scale multiplier: $1M cap = 1.0x, $10M = 1.5x, $100M = 2.0x,
+  // $1B = 2.5x. Clamp to a floor of 0.6x so tiny-cap launches still
+  // need a basic minimum count.
+  const mcapMult = Math.max(0.6, Math.min(5, 1 + Math.log10(mcap / 1_000_000) * 0.5));
+  const thinThreshold = Math.round(base * mcapMult);
   return {
     buys: txns.buys,
     sells: txns.sells,

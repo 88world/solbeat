@@ -4,26 +4,57 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { TrendingToken } from "@/types/token";
 
-const MAX_SAMPLES = 90;
+const MAX_SAMPLES = 180;
 
 /**
  * Supported timeframes. Each maps to:
  *   - the window length the chart spans (windowMs)
  *   - which DexScreener %-change field we use to seed the synthesized
  *     pre-render history (`price_change_*`)
+ *   - synthSamples: how many synthesized points fill that window before
+ *     real samples start arriving. Longer windows get more points so the
+ *     curve stays smooth instead of stepping between sparse anchors.
  */
 type Timeframe = "5m" | "1h" | "6h" | "24h";
 const TF_MAP: Record<
   Timeframe,
-  { windowMs: number; changeField: keyof Pick<TrendingToken,
-    "price_change_5m" | "price_change_1h" | "price_change_6h" | "price_change_24h">; label: string }
+  {
+    windowMs: number;
+    changeField: keyof Pick<TrendingToken,
+      "price_change_5m" | "price_change_1h" | "price_change_6h" | "price_change_24h">;
+    label: string;
+    synthSamples: number;
+  }
 > = {
-  "5m":  { windowMs: 5 * 60 * 1000,        changeField: "price_change_5m",  label: "5m" },
-  "1h":  { windowMs: 60 * 60 * 1000,       changeField: "price_change_1h",  label: "1h" },
-  "6h":  { windowMs: 6 * 60 * 60 * 1000,   changeField: "price_change_6h",  label: "6h" },
-  "24h": { windowMs: 24 * 60 * 60 * 1000,  changeField: "price_change_24h", label: "24h" },
+  "5m":  { windowMs: 5 * 60 * 1000,        changeField: "price_change_5m",  label: "5m",  synthSamples: 36 },
+  "1h":  { windowMs: 60 * 60 * 1000,       changeField: "price_change_1h",  label: "1h",  synthSamples: 60 },
+  "6h":  { windowMs: 6 * 60 * 60 * 1000,   changeField: "price_change_6h",  label: "6h",  synthSamples: 96 },
+  "24h": { windowMs: 24 * 60 * 60 * 1000,  changeField: "price_change_24h", label: "24h", synthSamples: 120 },
 };
 const COLORS = ["#FF2D9C", "#5E5CFF", "#14F195", "#FF8B2D", "#8A6BFF"];
+
+/**
+ * Stable per-token color. Hashing the contract address means BONK is always
+ * pink, WIF is always blue, etc., even as the trending order shuffles. Index-
+ * mod-COLORS.length flipped colors every time the rank changed; visually this
+ * looked like the lines all swapped places, the opposite of "live".
+ */
+function colorForCa(ca: string): string {
+  let h = 0;
+  for (let i = 0; i < ca.length; i++) {
+    h = (h * 31 + ca.charCodeAt(i)) >>> 0;
+  }
+  return COLORS[h % COLORS.length];
+}
+
+/** Hex-to-rgba helper for gradient fills under each trace. */
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 type Sample = { ts: number; price: number };
 type TokenHistory = {
@@ -38,16 +69,18 @@ type TokenHistory = {
 /**
  * Live token chart on a shared % axis.
  *
- *   Y = price as % change since the start of the visible window (1h).
+ *   Y = price as % change since the start of the visible window.
  *   X = time (right edge = now).
  *
  * All lines share the same y axis, so winners climb, losers drop, and the
  * lines naturally separate, no more pile-up of overlapping labels at the
  * right edge.
  *
- * Initial render uses each token's `price_change_1h` to synthesize a
- * plausible 1h trajectory (smoothstep + light noise). Real samples replace
- * the synthesized portion as time passes.
+ * Timeframes (5m/1h/6h/24h) toggle which DexScreener `price_change_*`
+ * field seeds the synthesized history and how long the window spans.
+ * Switching timeframes drops the existing histories and re-seeds them
+ * for the new window. Real samples replace synthesized ones as polls
+ * arrive.
  */
 export function LiveChart({
   tokens,
@@ -64,6 +97,25 @@ export function LiveChart({
   const hoverIdxRef = useRef<number | null>(null);
   const [cursor, setCursor] = useState<"default" | "pointer">("default");
   const router = useRouter();
+
+  // Track whether the current theme is dark so the canvas grid + label
+  // colors can swap. The canvas isn't a DOM element so it can't pick up
+  // CSS vars — we read them once per resolved theme change instead.
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const root = document.documentElement;
+    const compute = () => {
+      const t = root.getAttribute("data-theme");
+      // `light` is opt-in; everything else (`dark` or unset) is dark.
+      setIsDark(t !== "light");
+    };
+    compute();
+    const obs = new MutationObserver(compute);
+    obs.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+  const isDarkRef = useRef(isDark);
+  isDarkRef.current = isDark;
 
   // Timeframe selector. Picks which DexScreener %-change field to seed
   // the synthesized history from + the chart's window length. The window
@@ -87,7 +139,7 @@ export function LiveChart({
     const seen = new Set<string>();
     const cfg = TF_MAP[tf];
 
-    top.forEach((token, idx) => {
+    top.forEach((token) => {
       if (token.price_usd == null) return;
       seen.add(token.ca);
       const symbol = (token.symbol ?? "").replace(/^\$/, "").toUpperCase();
@@ -100,13 +152,13 @@ export function LiveChart({
           token.price_usd,
           tfChange,
           cfg.windowMs,
-          32,
+          cfg.synthSamples,
         );
         histRef.current.set(token.ca, {
           ca: token.ca,
           symbol,
           samples,
-          color: COLORS[idx % COLORS.length],
+          color: colorForCa(token.ca),
           current: token.price_usd,
           change24h,
         });
@@ -121,7 +173,7 @@ export function LiveChart({
         existing.symbol = symbol;
         existing.current = token.price_usd;
         existing.change24h = change24h;
-        existing.color = COLORS[idx % COLORS.length];
+        existing.color = colorForCa(token.ca);
       }
     });
 
@@ -150,9 +202,14 @@ export function LiveChart({
       if (!visible) return;
 
       const rect = canvas.getBoundingClientRect();
-      if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
-        canvas.width = Math.floor(rect.width * dpr);
-        canvas.height = Math.floor(rect.height * dpr);
+      const targetW = Math.floor(rect.width * dpr);
+      const targetH = Math.floor(rect.height * dpr);
+      // Compare against the integer target, not raw rect.width * dpr,
+      // so we don't reassign canvas.width every frame on fractional dpr
+      // (each reassignment wipes the canvas + costs a layer rebuild).
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -219,10 +276,14 @@ export function LiveChart({
         padT + (1 - (pct - yMin) / yRange) * drawH;
 
       // ── Background grid ──
-      ctx.strokeStyle = "rgba(10, 10, 30, 0.05)";
+      // Theme-aware ink. Light theme uses near-black ink at low alpha;
+      // dark theme uses near-white ink. Same opacity ramp in both so the
+      // chart reads the same regardless of mode.
+      const ink = isDarkRef.current ? "255, 255, 255" : "10, 10, 30";
+      ctx.strokeStyle = `rgba(${ink}, 0.06)`;
       ctx.lineWidth = 1;
       ctx.font = "9px ui-monospace, monospace";
-      ctx.fillStyle = "rgba(10, 10, 30, 0.32)";
+      ctx.fillStyle = `rgba(${ink}, 0.42)`;
       ctx.textBaseline = "middle";
       ctx.textAlign = "right";
 
@@ -239,7 +300,7 @@ export function LiveChart({
       }
 
       // Zero line, slightly stronger
-      ctx.strokeStyle = "rgba(10, 10, 30, 0.18)";
+      ctx.strokeStyle = `rgba(${ink}, 0.22)`;
       ctx.lineWidth = 1;
       const yZero = yForPct(0);
       ctx.beginPath();
@@ -248,7 +309,7 @@ export function LiveChart({
       ctx.stroke();
 
       // Vertical time markers
-      ctx.strokeStyle = "rgba(10, 10, 30, 0.04)";
+      ctx.strokeStyle = `rgba(${ink}, 0.05)`;
       ctx.setLineDash([2, 4]);
       for (let i = 1; i < 4; i++) {
         const x = padL + (drawW / 4) * i;
@@ -259,12 +320,13 @@ export function LiveChart({
       }
       ctx.setLineDash([]);
 
-      // Axis time labels
-      ctx.fillStyle = "rgba(10, 10, 30, 0.32)";
+      // Axis time labels. "x ago" needs to follow whatever timeframe the
+      // chart is currently on — otherwise the chart contradicts itself.
+      ctx.fillStyle = `rgba(${ink}, 0.42)`;
       ctx.font = "9px ui-monospace, monospace";
       ctx.textBaseline = "alphabetic";
       ctx.textAlign = "left";
-      ctx.fillText("1h ago", padL, h - 4);
+      ctx.fillText(`${TF_MAP[tfRef.current].label} ago`, padL, h - 4);
       ctx.textAlign = "right";
       ctx.fillText("now", padL + drawW, h - 4);
 
@@ -274,17 +336,20 @@ export function LiveChart({
         for (const p of trace.points) p.y = yForPct(p.pct);
       }
 
-      // Draw lines
-      for (const trace of traces) {
-        const pts = trace.points;
-        if (pts.length < 2) continue;
+      // Hover state: when the user is over a label, brighten that line and
+      // dim the others. Index matches `labels` ordering (assigned below).
+      // We need the same index here so the hovered trace can be matched.
+      // labels[i].trace === traces[?], so walk the labels list to find the
+      // hovered trace identity.
+      const hoveredCa = (() => {
+        const idx = hoverIdxRef.current;
+        if (idx == null) return null;
+        const t = hitTargetsRef.current[idx];
+        return t?.ca ?? null;
+      })();
 
-        ctx.strokeStyle = trace.hist.color;
-        ctx.lineWidth = 1.6;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.shadowColor = trace.hist.color;
-        ctx.shadowBlur = 3;
+      // Helper to build the line path so the fill + stroke share geometry.
+      const buildPath = (pts: { x: number; y: number }[]) => {
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
         for (let i = 1; i < pts.length - 1; i++) {
@@ -293,8 +358,59 @@ export function LiveChart({
           ctx.quadraticCurveTo(pts[i].x, pts[i].y, cx, cy);
         }
         ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+      };
+
+      // Draw fills first so strokes always sit on top of them. Each trace
+      // closes its path down to the zero line (yZero) so the gradient
+      // visualizes the "% above/below 0" envelope, not "% above the chart
+      // bottom" which is meaningless on a shared %-axis. When the line is
+      // dipped below 0 it fills downward, above 0 it fills upward.
+      for (const trace of traces) {
+        const pts = trace.points;
+        if (pts.length < 2) continue;
+        const isOther = hoveredCa != null && trace.hist.ca !== hoveredCa;
+        const dim = isOther ? 0.18 : 1;
+        // Vertical gradient: strong near the line, fades to fully
+        // transparent at the zero line. Re-derived per trace so the color
+        // tints correctly.
+        const grad = ctx.createLinearGradient(0, padT, 0, padT + drawH);
+        const c = trace.hist.color;
+        // Top of envelope → 22% alpha, fading to 0 toward the zero line.
+        grad.addColorStop(0, hexToRgba(c, 0.22 * dim));
+        grad.addColorStop(1, hexToRgba(c, 0));
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, yZero);
+        ctx.lineTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length - 1; i++) {
+          const cx = (pts[i].x + pts[i + 1].x) / 2;
+          const cy = (pts[i].y + pts[i + 1].y) / 2;
+          ctx.quadraticCurveTo(pts[i].x, pts[i].y, cx, cy);
+        }
+        ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+        ctx.lineTo(pts[pts.length - 1].x, yZero);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Draw strokes on top of fills.
+      for (const trace of traces) {
+        const pts = trace.points;
+        if (pts.length < 2) continue;
+        const isHovered = hoveredCa === trace.hist.ca;
+        const isOther = hoveredCa != null && !isHovered;
+
+        ctx.strokeStyle = trace.hist.color;
+        ctx.globalAlpha = isOther ? 0.25 : 1;
+        ctx.lineWidth = isHovered ? 2.2 : 1.6;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.shadowColor = trace.hist.color;
+        ctx.shadowBlur = isHovered ? 6 : 3;
+        buildPath(pts);
         ctx.stroke();
         ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
       }
 
       // Resolve label positions: place at line tip, then collide-resolve
@@ -328,41 +444,54 @@ export function LiveChart({
       ctx.textAlign = "left";
       for (let labIdx = 0; labIdx < labels.length; labIdx++) {
         const lab = labels[labIdx];
-        // Tip dot at the actual line end
+        const isHovered = hoveredCa === lab.trace.hist.ca;
+        const isOther = hoveredCa != null && !isHovered;
+        const labelAlpha = isOther ? 0.32 : 1;
+
+        // Tip dot at the actual line end. Hovered traces get a haloed
+        // dot so the focused line literally glows.
         const tip = lab.trace.points[lab.trace.points.length - 1];
+        ctx.globalAlpha = labelAlpha;
         ctx.fillStyle = lab.trace.hist.color;
         ctx.beginPath();
-        ctx.arc(tip.x, tip.y, 2.6, 0, Math.PI * 2);
+        ctx.arc(tip.x, tip.y, isHovered ? 3.6 : 2.6, 0, Math.PI * 2);
         ctx.fill();
+        if (isHovered) {
+          ctx.globalAlpha = 0.35;
+          ctx.beginPath();
+          ctx.arc(tip.x, tip.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = labelAlpha;
 
         // Connector from tip to label if they got displaced
         if (Math.abs(tip.y - lab.y) > 2) {
           ctx.strokeStyle = lab.trace.hist.color;
-          ctx.globalAlpha = 0.4;
+          ctx.globalAlpha = labelAlpha * 0.4;
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(tip.x + 3, tip.y);
           ctx.lineTo(tip.x + 8, lab.y);
           ctx.stroke();
-          ctx.globalAlpha = 1;
+          ctx.globalAlpha = labelAlpha;
         }
 
         // Symbol — measure first for the hit target, optionally underlined
-        // when hovered.
+        // when hovered. `isHovered` is shared with the line-render block so
+        // hover state on the canvas matches hover state on the label.
         const symW = ctx.measureText(lab.trace.hist.symbol).width;
-        const isHovered = hoverIdxRef.current === labIdx;
         ctx.fillStyle = lab.trace.hist.color;
         ctx.fillText(lab.trace.hist.symbol, tip.x + 10, lab.y);
         if (isHovered) {
           // Soft underline so the user sees it's a link.
           ctx.strokeStyle = lab.trace.hist.color;
-          ctx.globalAlpha = 0.6;
+          ctx.globalAlpha = labelAlpha * 0.6;
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(tip.x + 10, lab.y + 7);
           ctx.lineTo(tip.x + 10 + symW, lab.y + 7);
           ctx.stroke();
-          ctx.globalAlpha = 1;
+          ctx.globalAlpha = labelAlpha;
         }
 
         // % since window start
@@ -385,6 +514,7 @@ export function LiveChart({
           h: 18,
         });
       }
+      ctx.globalAlpha = 1;
       hitTargetsRef.current = hits;
     };
     raf = requestAnimationFrame(draw);
@@ -397,12 +527,17 @@ export function LiveChart({
 
   return (
     <div
-      className="w-full rounded-2xl border border-border-subtle backdrop-blur-md overflow-hidden"
+      // backdrop-filter on a parent of a <canvas> can leave Chrome
+      // sampling the wrong compositor layer on re-render (the canvas
+      // area went black after switching timeframes). Layering a solid
+      // base color below the gradient gives us the same glassmorphic
+      // look without the bug.
+      className="w-full rounded-2xl border border-border-subtle overflow-hidden relative"
       style={{
         background:
-          "linear-gradient(180deg, var(--glass-strong), var(--glass-medium))",
+          "linear-gradient(180deg, var(--glass-strong), var(--glass-medium)), var(--bg-primary)",
         boxShadow:
-          "0 1px 0 rgba(255,255,255,0.7) inset, 0 8px 28px rgba(10, 10, 30, 0.05)",
+          "0 1px 0 rgba(255,255,255,0.08) inset, 0 8px 28px rgba(10, 10, 30, 0.06)",
       }}
     >
       <div className="flex items-center justify-between px-4 pt-3.5 pb-1.5 flex-wrap gap-2">
@@ -485,6 +620,13 @@ export function LiveChart({
  * Build a synthetic windowMs-ago → current trajectory from a single
  * %-change figure (5m / 1h / 6h / 24h whichever the active timeframe
  * picks). Gets gradually replaced by real samples as time passes.
+ *
+ * Noise budget is intentionally tiny. For high-%change tokens (BTS at
+ * +2500%, etc.) scaling noise by `|currentPrice - startPrice|` blew the
+ * line into a jagged saw, because at the early samples the trend price
+ * is a small fraction of the current price and the noise dwarfed it.
+ * Noise is now anchored to the LOCAL trend value, so jitter is ~0.4%
+ * of whatever price the trend sits at — visible texture, never chunky.
  */
 function synthesizeHistory(
   currentPrice: number,
@@ -497,9 +639,12 @@ function synthesizeHistory(
   const out: Sample[] = [];
   for (let i = 0; i < count; i++) {
     const tFrac = i / (count - 1);
-    const eased = tFrac * tFrac * (3 - 2 * tFrac);
+    // Smootherstep, slightly more S-shaped than smoothstep for nicer
+    // build-up on long windows.
+    const eased = tFrac * tFrac * tFrac * (tFrac * (tFrac * 6 - 15) + 10);
     const trend = startPrice + (currentPrice - startPrice) * eased;
-    const noiseAmp = Math.abs(currentPrice - startPrice) * 0.035 + currentPrice * 0.0008;
+    // Noise relative to local price → never blows up on parabolic tokens.
+    const noiseAmp = Math.max(Math.abs(trend), currentPrice * 0.001) * 0.004;
     const noise = (Math.random() - 0.5) * 2 * noiseAmp;
     out.push({
       ts: now - windowMs * (1 - tFrac),
