@@ -99,9 +99,60 @@ export function TokenHeader({ analysis }: { analysis: TokenAnalysis }) {
               label="X feed"
             />
           )}
+
+          <ShareOnX
+            symbol={metadata.symbol}
+            name={metadata.name}
+            ca={metadata.ca}
+          />
         </div>
       </div>
     </div>
+  );
+}
+
+function ShareOnX({
+  symbol,
+  name,
+  ca,
+}: {
+  symbol: string | null;
+  name: string | null;
+  ca: string;
+}) {
+  // Built client-side so the URL anchors to the user's actual origin (works
+  // on localhost during dev, on the deployed domain in prod). The X intent
+  // URL fires in a new tab; X scrapes our /opengraph-image and embeds the
+  // generated card automatically.
+  const onClick = () => {
+    if (typeof window === "undefined") return;
+    const tokenUrl = `${window.location.origin}/token/${ca}`;
+    const headline = symbol
+      ? `$${symbol.replace(/^\$/, "").toUpperCase()} on SolBeat — read the pulse:`
+      : `${name ?? "This Solana token"} on SolBeat — read the pulse:`;
+    const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+      headline,
+    )}&url=${encodeURIComponent(tokenUrl)}`;
+    window.open(intent, "_blank", "noreferrer,noopener");
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10.5px] font-semibold text-text-primary bg-text-primary/[0.06] hover:bg-text-primary/[0.10] transition"
+      title="Share this token on X"
+    >
+      <svg
+        width="11"
+        height="11"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden
+      >
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+      </svg>
+      Share
+    </button>
   );
 }
 
