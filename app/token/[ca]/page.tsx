@@ -10,6 +10,8 @@ import {
 import { readPulseHistory } from "@/lib/pulse/snapshots";
 import type { TokenAnalysis } from "@/types/token";
 import { TopNav } from "@/components/shared/TopNav";
+import { CursorBlob } from "@/components/shared/CursorBlob";
+import { EntranceStagger } from "@/components/shared/EntranceStagger";
 import { TokenHeader } from "@/components/token/TokenHeader";
 import { PriceCard } from "@/components/token/PriceCard";
 import { AISynthesis } from "@/components/token/AISynthesis";
@@ -147,11 +149,12 @@ export default async function TokenPage({ params }: PageProps) {
   return (
     <div
       data-theme="light"
-      className="flex flex-col min-h-screen"
+      className="relative flex flex-col min-h-screen"
       style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}
     >
+      <CursorBlob />
       <TopNav />
-      <main className="flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pb-24">
+      <main className="relative z-10 flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pb-24">
         <Link
           href="/"
           className="inline-flex items-center gap-1 text-[12px] text-text-muted hover:text-text-secondary transition mb-6 mt-2"
@@ -159,57 +162,69 @@ export default async function TokenPage({ params }: PageProps) {
           ← Back
         </Link>
 
-        <div className="mb-7">
-          <TokenHeader analysis={fastAnalysis} />
-        </div>
+        <EntranceStagger step={70} startDelay={80}>
+          <div data-stagger-child className="mb-7" style={{ opacity: 0 }}>
+            <TokenHeader analysis={fastAnalysis} />
+          </div>
 
-        {/* Row 1: PriceCard (left, fast) + AI Synthesis (right, slow). The
-            "what's it priced at + what does it mean" headline. */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.15fr] gap-5 lg:gap-6 mb-5">
-          <PriceCard analysis={fastAnalysis} />
-          <Suspense fallback={<SynthesisSkeleton />}>
-            <AISynthesisSlow ca={ca} fast={fast} />
-          </Suspense>
-        </div>
+          {/* Row 1: PriceCard (left, fast) + AI Synthesis (right, slow). The
+              "what's it priced at + what does it mean" headline. */}
+          <div
+            data-stagger-child
+            className="grid grid-cols-1 lg:grid-cols-[1fr_1.15fr] gap-5 lg:gap-6 mb-5"
+            style={{ opacity: 0 }}
+          >
+            <PriceCard analysis={fastAnalysis} />
+            <Suspense fallback={<SynthesisSkeleton />}>
+              <AISynthesisSlow ca={ca} fast={fast} />
+            </Suspense>
+          </div>
 
-        {/* Row 2: Signal + Risk side-by-side. Both severity-tagged composite
-            views, they share visual language so reading them in parallel
-            beats stacked. */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-          <Suspense fallback={<CardSkeleton lines={4} />}>
-            <SignalSlow ca={ca} fast={fast} />
-          </Suspense>
-          <Suspense fallback={<CardSkeleton lines={6} withCircle />}>
-            <RiskSlow ca={ca} fast={fast} />
-          </Suspense>
-        </div>
+          {/* Row 2: Signal + Risk side-by-side. */}
+          <div
+            data-stagger-child
+            className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5"
+            style={{ opacity: 0 }}
+          >
+            <Suspense fallback={<CardSkeleton lines={4} />}>
+              <SignalSlow ca={ca} fast={fast} />
+            </Suspense>
+            <Suspense fallback={<CardSkeleton lines={6} withCircle />}>
+              <RiskSlow ca={ca} fast={fast} />
+            </Suspense>
+          </div>
 
-        {/* Row 3: BubbleMap (left, fast) + HolderList (right, fast). The
-            on-chain detail panels, both fast so no Suspense. */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-5 lg:gap-6 mb-5">
-          <BubbleMap ca={fast.metadata.ca} />
-          <HolderList holders={fast.holders} ca={fast.metadata.ca} />
-        </div>
+          {/* Row 3: BubbleMap (left, fast) + HolderList (right, fast). */}
+          <div
+            data-stagger-child
+            className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-5 lg:gap-6 mb-5"
+            style={{ opacity: 0 }}
+          >
+            <BubbleMap ca={fast.metadata.ca} />
+            <HolderList holders={fast.holders} ca={fast.metadata.ca} />
+          </div>
 
-        {/* Row 4a: Pulse timeline. The moat — every prior reading on this CA. */}
-        <Suspense fallback={null}>
-          <PulseTimelineRow ca={ca} />
-        </Suspense>
+          {/* Row 4a: Pulse timeline. */}
+          <div data-stagger-child style={{ opacity: 0 }}>
+            <Suspense fallback={null}>
+              <PulseTimelineRow ca={ca} />
+            </Suspense>
+          </div>
 
-        {/* Row 4b: Catalysts full-width. News reads better wide than narrow. */}
-        <div className="mb-5">
-          <Suspense fallback={<CardSkeleton lines={6} />}>
-            <CatalystSlow ca={ca} fast={fast} />
-          </Suspense>
-        </div>
+          {/* Row 4b: Catalysts full-width. */}
+          <div data-stagger-child className="mb-5" style={{ opacity: 0 }}>
+            <Suspense fallback={<CardSkeleton lines={6} />}>
+              <CatalystSlow ca={ca} fast={fast} />
+            </Suspense>
+          </div>
 
-        {/* Row 5: Recent tweets, full-width container with internal 2-col
-            grid so we get more cards visible per row. */}
-        <div className="mb-8">
-          <Suspense fallback={<CardSkeleton lines={5} />}>
-            <TweetsSlow ca={ca} fast={fast} />
-          </Suspense>
-        </div>
+          {/* Row 5: Recent tweets, full-width. */}
+          <div data-stagger-child className="mb-8" style={{ opacity: 0 }}>
+            <Suspense fallback={<CardSkeleton lines={5} />}>
+              <TweetsSlow ca={ca} fast={fast} />
+            </Suspense>
+          </div>
+        </EntranceStagger>
 
         <SwapPanel analysis={fastAnalysis} />
       </main>

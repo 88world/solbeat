@@ -4,25 +4,52 @@ import { WalletButton } from "./WalletButton";
 
 export function TopNav() {
   return (
-    <header className="sticky top-0 z-40 w-full">
+    <header
+      className="sticky top-0 z-40 w-full"
+      style={{
+        // Glassmorphic nav, blurred bg with hairline border under.
+        background: "rgba(252, 252, 254, 0.55)",
+        backdropFilter: "saturate(180%) blur(18px)",
+        WebkitBackdropFilter: "saturate(180%) blur(18px)",
+        borderBottom: "1px solid rgba(10, 10, 30, 0.05)",
+      }}
+    >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-[64px] flex items-center justify-between">
         <Link href="/" aria-label="SolBeat home">
           <Logo />
         </Link>
-        <nav className="hidden sm:flex items-center gap-6 text-[13px] text-text-secondary">
-          <Link href="/trending" className="hover:text-text-primary transition">
+        <nav className="hidden sm:flex items-center gap-7 text-[13px] text-text-secondary">
+          <Link
+            href="/trending"
+            className="relative hover:text-text-primary transition group"
+          >
             Trending
+            <span
+              className="absolute -bottom-1 left-0 h-[1.5px] w-0 group-hover:w-full transition-all duration-300"
+              style={{ background: "linear-gradient(90deg, #FF2D9C, #5E5CFF)" }}
+            />
           </Link>
-          <Link href="/wallet" className="hover:text-text-primary transition">
+          <Link
+            href="/wallet"
+            className="relative hover:text-text-primary transition group"
+          >
             Wallet pulse
+            <span
+              className="absolute -bottom-1 left-0 h-[1.5px] w-0 group-hover:w-full transition-all duration-300"
+              style={{ background: "linear-gradient(90deg, #FF2D9C, #5E5CFF)" }}
+            />
           </Link>
           <a
             href="https://github.com/blockvalley/solbeat"
             target="_blank"
             rel="noreferrer"
-            className="hover:text-text-primary transition"
+            className="relative hover:text-text-primary transition group"
           >
             GitHub
+            <span
+              className="absolute -bottom-1 left-0 h-[1.5px] w-0 group-hover:w-full transition-all duration-300"
+              style={{ background: "linear-gradient(90deg, #FF2D9C, #5E5CFF)" }}
+            />
           </a>
         </nav>
         <div className="flex items-center gap-3">

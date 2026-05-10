@@ -1,16 +1,21 @@
 import { TopNav } from "@/components/shared/TopNav";
 import { Hero } from "@/components/hero/Hero";
 import { EcosystemStrip } from "@/components/hero/EcosystemStrip";
+import { CursorBlob } from "@/components/shared/CursorBlob";
 
 export default function Home() {
   return (
     <div
       data-theme="light"
-      className="flex flex-col min-h-screen"
+      className="relative flex flex-col min-h-screen"
       style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}
     >
+      {/* Cursor-following ambient blob behind the content. Reads as
+          atmosphere; gives the page a subtle "warmth follows you" feel
+          you can't look at directly but instantly notice if removed. */}
+      <CursorBlob />
       <TopNav />
-      <main className="flex-1 flex flex-col">
+      <main className="relative flex-1 flex flex-col z-10">
         <Hero />
         {/* Below-the-fold: live ecosystem readings. Network TPS, DeFi TVL,
             NFT activity, SOL macro. Scroll past the hero to see the whole
