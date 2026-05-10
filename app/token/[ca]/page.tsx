@@ -16,6 +16,7 @@ import { EntranceStagger } from "@/components/shared/EntranceStagger";
 import { TokenHeader } from "@/components/token/TokenHeader";
 import { BuySellPressure } from "@/components/token/BuySellPressure";
 import { BondingCurveCard } from "@/components/token/BondingCurveCard";
+import { CandlestickChart } from "@/components/token/CandlestickChart";
 import { PriceCard } from "@/components/token/PriceCard";
 import { AISynthesis } from "@/components/token/AISynthesis";
 import { RiskScoreCard } from "@/components/token/RiskScoreCard";
@@ -188,6 +189,14 @@ export default async function TokenPage({ params }: PageProps) {
           >
             <PriceCard analysis={fastAnalysis} />
             <BuySellPressure analysis={fastAnalysis} />
+          </div>
+
+          {/* Row 1.5: Candlestick chart full-width. Was the single biggest
+              data gap vs Photon / DexScreener; degens won't scan a token
+              page without one. TradingView's lightweight-charts powered
+              by GeckoTerminal's free OHLCV. */}
+          <div data-stagger-child className="mb-5" style={{ opacity: 0 }}>
+            <CandlestickChart ca={ca} />
           </div>
 
           {/* Row 2: AI Synthesis full-width. The narrative read, wide

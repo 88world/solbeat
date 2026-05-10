@@ -152,8 +152,9 @@ function Header({
             onClick={() => setTab(t)}
             className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.12em] transition"
             style={{
-              background: tab === t ? "#0a0a1e" : "transparent",
-              color: tab === t ? "#fcfcfe" : "#5a5a70",
+              background: tab === t ? "var(--text-primary)" : "transparent",
+              color:
+                tab === t ? "var(--bg-primary)" : "var(--text-muted)",
             }}
           >
             {t}

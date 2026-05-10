@@ -159,7 +159,7 @@ export function HiddenSolHero({
             <span
               ref={numberRef}
               className="text-[40px] sm:text-[52px] font-black text-mono tabular-nums leading-none tracking-tight"
-              style={{ color: "#0a0a1e" }}
+              style={{ color: "var(--text-primary)" }}
             >
               {scan.user_receives_sol.toFixed(4)}
             </span>
@@ -182,8 +182,8 @@ export function HiddenSolHero({
           onClick={onJump}
           className="shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13.5px] font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
           style={{
-            background: "#0a0a1e",
-            color: "#fcfcfe",
+            background: "var(--text-primary)",
+            color: "var(--bg-primary)",
             boxShadow:
               "0 8px 22px rgba(10, 10, 30, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
           }}

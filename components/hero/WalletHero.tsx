@@ -196,8 +196,8 @@ function DisconnectedPitch({ onConnect }: { onConnect: () => void }) {
           onClick={onConnect}
           className="shrink-0 inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[14px] font-bold transition-all hover:scale-[1.03] active:scale-[0.98]"
           style={{
-            background: "#0a0a1e",
-            color: "#fcfcfe",
+            background: "var(--text-primary)",
+            color: "var(--bg-primary)",
             boxShadow:
               "0 10px 28px rgba(10, 10, 30, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
           }}
@@ -303,8 +303,8 @@ function ConnectedHero({
                 href="/wallet"
                 className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
                 style={{
-                  background: "#0a0a1e",
-                  color: "#fcfcfe",
+                  background: "var(--text-primary)",
+                  color: "var(--bg-primary)",
                   boxShadow: "0 6px 18px rgba(10, 10, 30, 0.18)",
                 }}
               >
