@@ -4,7 +4,13 @@
   /* SolBeat design tokens — dark default for data-dense screens */
   --bg-primary: #0a0a0f;
   --bg-elevated: #12121a;
-  --bg-glass: rgba(18, 18, 26, 0.6);
+  --bg-glass: rgba(18, 18, 26, 0.62);
+  /* Reusable glass tints (components that hardcoded rgba whites should
+     prefer these so dark mode swaps automatically). */
+  --glass-strong: rgba(18, 18, 26, 0.78);
+  --glass-medium: rgba(18, 18, 26, 0.55);
+  --glass-soft: rgba(18, 18, 26, 0.40);
+  --glass-frost: rgba(28, 28, 40, 0.85);
 
   --text-primary: #f5f5fa;
   --text-secondary: #a0a0b0;
@@ -33,6 +39,10 @@
   --bg-primary: #fcfcfe;
   --bg-elevated: #ffffff;
   --bg-glass: rgba(255, 255, 255, 0.72);
+  --glass-strong: rgba(255, 255, 255, 0.78);
+  --glass-medium: rgba(255, 255, 255, 0.55);
+  --glass-soft: rgba(255, 255, 255, 0.40);
+  --glass-frost: rgba(252, 252, 254, 0.92);
 
   --text-primary: #0a0a14;
   --text-secondary: #4a4a5e;

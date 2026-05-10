@@ -387,7 +387,7 @@ function SkeletonCard({ label }: { label: string }) {
     <div
       className="rounded-2xl px-4 sm:px-5 py-4 animate-shimmer"
       style={{
-        background: "rgba(255, 255, 255, 0.45)",
+        background: "var(--glass-soft)",
         border: "1px solid rgba(10, 10, 30, 0.04)",
         minHeight: 92,
       }}

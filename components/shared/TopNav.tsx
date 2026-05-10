@@ -8,11 +8,12 @@ export function TopNav() {
     <header
       className="sticky top-0 z-40 w-full"
       style={{
-        // Glassmorphic nav, blurred bg with hairline border under.
-        background: "rgba(252, 252, 254, 0.55)",
+        // Glassmorphic nav. Both colors come from CSS vars so the toggle
+        // swaps the tint between light + dark modes automatically.
+        background: "var(--glass-frost)",
         backdropFilter: "saturate(180%) blur(18px)",
         WebkitBackdropFilter: "saturate(180%) blur(18px)",
-        borderBottom: "1px solid rgba(10, 10, 30, 0.05)",
+        borderBottom: "1px solid var(--border-subtle)",
       }}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-[64px] flex items-center justify-between">

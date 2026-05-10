@@ -304,7 +304,7 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
                   height: 12,
                   marginLeft: -6,
                   marginTop: -6,
-                  background: "rgba(255, 255, 255, 0.55)",
+                  background: "var(--glass-medium)",
                   animation: "ripple 700ms cubic-bezier(0.22,1,0.36,1) forwards",
                 }}
               />

@@ -55,8 +55,8 @@ export function ThemeToggle() {
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
       className="size-9 rounded-full inline-flex items-center justify-center transition-all relative overflow-hidden group"
       style={{
-        background: "rgba(10, 10, 30, 0.04)",
-        boxShadow: "inset 0 0 0 1px rgba(10, 10, 30, 0.06)",
+        background: "var(--bg-glass)",
+        boxShadow: "inset 0 0 0 1px var(--border-subtle)",
       }}
     >
       {/* Sun icon — visible in dark mode (means "switch to light") */}

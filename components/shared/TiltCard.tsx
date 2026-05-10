@@ -110,7 +110,7 @@ export function TiltCard({
         (className ?? "")
       }
       style={{
-        background: glass ? "rgba(255, 255, 255, 0.65)" : undefined,
+        background: glass ? "var(--bg-glass)" : undefined,
         backdropFilter: glass ? "blur(20px) saturate(160%)" : undefined,
         WebkitBackdropFilter: glass ? "blur(20px) saturate(160%)" : undefined,
         border: glass ? "1px solid rgba(10, 10, 30, 0.06)" : undefined,

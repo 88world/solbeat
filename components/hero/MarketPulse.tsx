@@ -100,7 +100,7 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
       className="relative rounded-2xl border border-border-subtle p-4 backdrop-blur-md w-full max-w-sm overflow-hidden"
       style={{
         background:
-          "linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.55))",
+          "linear-gradient(180deg, var(--glass-strong), var(--glass-medium))",
         boxShadow:
           "0 1px 0 rgba(255,255,255,0.7) inset, 0 8px 28px rgba(10, 10, 30, 0.06)",
       }}
@@ -397,7 +397,7 @@ function Skeleton() {
   return (
     <div
       className="rounded-2xl border border-border-subtle p-4 w-full max-w-sm h-[260px]"
-      style={{ background: "rgba(255, 255, 255, 0.4)" }}
+      style={{ background: "var(--glass-soft)" }}
     >
       <div className="h-3 w-24 rounded bg-text-muted/15 animate-shimmer mb-3" />
       <div className="h-14 w-full rounded bg-text-muted/10 animate-shimmer mb-4" />

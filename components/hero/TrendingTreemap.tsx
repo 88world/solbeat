@@ -103,7 +103,7 @@ export function TrendingTreemap({ tokens, size = 340, heat = 0.2 }: Props) {
         className="relative w-full h-full overflow-hidden"
         style={{
           borderRadius: 16,
-          background: "rgba(255, 255, 255, 0.55)",
+          background: "var(--glass-medium)",
           backdropFilter: "blur(14px) saturate(160%)",
           WebkitBackdropFilter: "blur(14px) saturate(160%)",
           boxShadow:
@@ -293,19 +293,14 @@ function TileContent({
         </div>
       )}
 
-      {/* Bottom row: %change. Big tabular number. */}
+      {/* Bottom row: %change. Big tabular number that count-ups via
+          anime.js whenever the data updates so the tile reads as live. */}
       {showChange && change != null && (
-        <div
-          className="text-mono font-bold relative z-10"
-          style={{
-            color: positive ? "#0a4f2c" : "#5a1322",
-            fontSize: Math.min(15, Math.max(11, cell.w / 7)),
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {change >= 0 ? "+" : ""}
-          {change.toFixed(change >= 100 || change <= -100 ? 0 : 1)}%
-        </div>
+        <AnimatedPercent
+          change={change}
+          positive={positive}
+          width={cell.w}
+        />
       )}
 
       {/* Hover detail overlay — appears smoothly when the tile is focused. */}
@@ -337,6 +332,75 @@ function TileContent({
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * Per-tile animated percent. anime.js tweens between previous and new value
+ * whenever `change` updates, plus fires a brief glow flash so the tile
+ * visibly responds. Without this the treemap looked frozen between data
+ * polls (user complaint: "doesn't look smooth, no anime.js").
+ */
+function AnimatedPercent({
+  change,
+  positive,
+  width,
+}: {
+  change: number;
+  positive: boolean;
+  width: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const valRef = useRef<HTMLSpanElement>(null);
+  const lastRef = useRef(change);
+
+  useEffect(() => {
+    const obj = { v: lastRef.current };
+    const a = animate(obj, {
+      v: change,
+      duration: 700,
+      ease: "out(3)",
+      onUpdate: () => {
+        if (valRef.current) {
+          const v = obj.v;
+          valRef.current.textContent = `${v >= 0 ? "+" : ""}${v.toFixed(v >= 100 || v <= -100 ? 0 : 1)}%`;
+        }
+        lastRef.current = obj.v;
+      },
+    });
+    // Flash the tile container so the change is unmistakable.
+    if (ref.current && Math.abs(change - lastRef.current) > 0.5) {
+      const flashColor = change >= 0 ? "rgba(20,241,149,0.6)" : "rgba(255,45,156,0.6)";
+      animate(ref.current, {
+        textShadow: [
+          `0 0 0px ${flashColor}, 0 0 0px ${flashColor}`,
+          `0 0 12px ${flashColor}, 0 0 4px ${flashColor}`,
+          `0 0 0px ${flashColor}, 0 0 0px ${flashColor}`,
+        ],
+        duration: 800,
+        ease: "out(3)",
+      });
+    }
+    return () => {
+      a.pause();
+    };
+  }, [change]);
+
+  return (
+    <div
+      ref={ref}
+      className="text-mono font-bold relative z-10"
+      style={{
+        color: positive ? "#0a4f2c" : "#5a1322",
+        fontSize: Math.min(15, Math.max(11, width / 7)),
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      <span ref={valRef}>
+        {change >= 0 ? "+" : ""}
+        {change.toFixed(change >= 100 || change <= -100 ? 0 : 1)}%
+      </span>
     </div>
   );
 }

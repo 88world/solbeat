@@ -89,7 +89,7 @@ export function TrendingTable({ tokens }: { tokens: TrendingToken[] }) {
       className="w-full rounded-2xl border border-border-subtle overflow-hidden"
       style={{
         background:
-          "linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.55))",
+          "linear-gradient(180deg, var(--glass-strong), var(--glass-medium))",
         boxShadow:
           "0 1px 0 rgba(255,255,255,0.7) inset, 0 8px 28px rgba(10, 10, 30, 0.05)",
       }}

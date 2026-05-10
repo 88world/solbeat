@@ -58,7 +58,7 @@ export function TickerTape({
       className="relative overflow-hidden rounded-2xl"
       style={{
         background:
-          "linear-gradient(90deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.45) 50%, rgba(255, 255, 255, 0.6) 100%)",
+          "linear-gradient(90deg, var(--glass-medium) 0%, var(--glass-soft) 50%, var(--glass-medium) 100%)",
         backdropFilter: "blur(20px) saturate(160%)",
         WebkitBackdropFilter: "blur(20px) saturate(160%)",
         border: "1px solid rgba(10, 10, 30, 0.06)",

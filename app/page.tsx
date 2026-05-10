@@ -2,6 +2,7 @@ import { TopNav } from "@/components/shared/TopNav";
 import { Hero } from "@/components/hero/Hero";
 import { EcosystemStrip } from "@/components/hero/EcosystemStrip";
 import { TokensToWatch } from "@/components/hero/TokensToWatch";
+import { WalletHero } from "@/components/hero/WalletHero";
 import { CursorBlob } from "@/components/shared/CursorBlob";
 import { Aurora } from "@/components/shared/Aurora";
 import { ScrollReveal } from "@/components/shared/ScrollReveal";
@@ -20,6 +21,16 @@ export default function Home() {
       <TopNav />
       <main className="relative flex-1 flex flex-col z-10">
         <Hero />
+
+        {/* Wallet hero — the SolBeat selling point. Disconnected: pitch
+            for "you have hidden SOL." Connected: massive count-up of
+            recoverable SOL + portfolio quick view + reclaim CTA. Sits
+            right under the hero so it's the first thing a connected
+            user sees. */}
+        <section className="mx-auto max-w-[1320px] w-full px-5 lg:px-8">
+          <WalletHero />
+        </section>
+
         {/* Below-the-fold: live ecosystem readings. Network TPS, DeFi TVL,
             NFT activity, SOL macro. Scroll past the hero to see the whole
             Solana surface in one view. */}

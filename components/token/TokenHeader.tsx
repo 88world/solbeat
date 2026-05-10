@@ -27,7 +27,7 @@ export function TokenHeader({ analysis }: { analysis: TokenAnalysis }) {
       <div
         className="size-16 sm:size-20 rounded-2xl overflow-hidden flex items-center justify-center shrink-0"
         style={{
-          background: "rgba(255, 255, 255, 0.7)",
+          background: "var(--glass-strong)",
           border: "1px solid rgba(10, 10, 30, 0.06)",
           boxShadow: "0 6px 16px rgba(10, 10, 30, 0.05)",
         }}

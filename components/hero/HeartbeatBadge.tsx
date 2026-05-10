@@ -43,11 +43,11 @@ export function HeartbeatBadge({ bpm }: { bpm: number }) {
     <div
       className="inline-flex items-center gap-2.5 pl-2.5 pr-3 py-1.5 rounded-full border border-border-subtle"
       style={{
-        background: "rgba(255, 255, 255, 0.78)",
+        background: "var(--glass-strong)",
         backdropFilter: "blur(16px) saturate(160%)",
         WebkitBackdropFilter: "blur(16px) saturate(160%)",
         boxShadow:
-          "0 4px 16px rgba(10, 10, 30, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
+          "0 4px 16px rgba(10, 10, 30, 0.05), inset 0 1px 0 var(--glass-medium)",
       }}
       aria-label={`Solana market heat: ${label} · ${Math.round(displayBpm)} BPM`}
     >

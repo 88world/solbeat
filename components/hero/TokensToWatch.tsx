@@ -47,7 +47,7 @@ export function TokensToWatch() {
     <div
       className="rounded-2xl p-5 sm:p-6"
       style={{
-        background: "rgba(255, 255, 255, 0.55)",
+        background: "var(--glass-medium)",
         backdropFilter: "blur(20px) saturate(160%)",
         WebkitBackdropFilter: "blur(20px) saturate(160%)",
         border: "1px solid rgba(10, 10, 30, 0.06)",
@@ -126,7 +126,7 @@ function WatchCard({ token, index }: { token: TrendingToken; index: number }) {
         className="block rounded-xl p-3 transition-all relative overflow-hidden"
         style={{
           background:
-            "linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.40))",
+            "linear-gradient(180deg, var(--bg-glass), var(--glass-soft))",
           boxShadow:
             "inset 0 0 0 1px rgba(10, 10, 30, 0.06), 0 4px 12px rgba(10, 10, 30, 0.04)",
         }}
@@ -228,7 +228,7 @@ function SkeletonGrid() {
           key={i}
           className="rounded-xl p-3 animate-shimmer h-[100px]"
           style={{
-            background: "rgba(255, 255, 255, 0.45)",
+            background: "var(--glass-soft)",
             boxShadow: "inset 0 0 0 1px rgba(10, 10, 30, 0.05)",
           }}
         />
