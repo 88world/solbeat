@@ -3,7 +3,7 @@ export const TTL = {
   TOKEN_PRICE_S: 30,
   HOLDERS_S: 300,
   AI_SYNTHESIS_S: 600,
-  TRENDING_S: 60,
+  TRENDING_S: 15,
 } as const;
 
 export const LIMITS = {

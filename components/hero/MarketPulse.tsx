@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { animate } from "animejs";
 import type { HeatSnapshot } from "@/lib/utils/heat";
 import { heatToBpm, heatLabel } from "@/lib/utils/heat";
 import { humanizeNumber, humanizePrice, pctChange } from "@/lib/utils";
@@ -20,7 +21,12 @@ import { ECGTrace } from "./ECGTrace";
  */
 export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
   const [displayBpm, setDisplayBpm] = useState(55);
+  const [lastTick, setLastTick] = useState(Date.now());
+  const [secondsAgo, setSecondsAgo] = useState(0);
+  const bpmRef = useRef<HTMLSpanElement>(null);
+  const prevHeatRef = useRef(0);
 
+  // Smooth BPM toward target via lerp.
   useEffect(() => {
     const target = pulse ? heatToBpm(pulse.heat) : 55;
     let raf = 0;
@@ -36,6 +42,39 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
     return () => cancelAnimationFrame(raf);
   }, [pulse]);
 
+  // On every meaningful heat update, flash the BPM and bookmark the tick time.
+  useEffect(() => {
+    if (!pulse) return;
+    const prev = prevHeatRef.current;
+    if (Math.abs(pulse.heat - prev) > 0.005) {
+      prevHeatRef.current = pulse.heat;
+      setLastTick(Date.now());
+      const el = bpmRef.current;
+      if (el) {
+        // anime.js text-shadow flash. Brief brightening then back to baseline.
+        const direction = pulse.heat > prev ? "up" : "down";
+        const flashColor = direction === "up" ? "#FF2D9C" : "#5e5cff";
+        animate(el, {
+          textShadow: [
+            `0 0 0px ${flashColor}00, 0 0 0px ${flashColor}00`,
+            `0 0 28px ${flashColor}cc, 0 0 6px ${flashColor}aa`,
+            `0 0 24px ${flashColor}33, 0 0 4px ${flashColor}55`,
+          ],
+          duration: 800,
+          ease: "out(3)",
+        });
+      }
+    }
+  }, [pulse]);
+
+  // "Updated Xs ago" tick.
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSecondsAgo(Math.floor((Date.now() - lastTick) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [lastTick]);
+
   if (!pulse) return <Skeleton />;
 
   const bpm = Math.round(displayBpm);
@@ -43,7 +82,16 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
   const labelColor = pickLabelColor(label);
   const bullish = pulse.sentiment >= 0;
   const sentimentColor = bullish ? "#0a8f57" : "#c1374a";
-  const traceColor = bullish ? "#FF2D9C" : "#FF4757";
+  // Trace color escalates with heat — extreme markets render in pink-red,
+  // calm markets in indigo so the trace itself reads the temperature.
+  const traceColor =
+    label === "Extreme"
+      ? "#c1374a"
+      : label === "On fire"
+        ? "#FF2D9C"
+        : bullish
+          ? "#FF2D9C"
+          : "#FF4757";
 
   return (
     <div
@@ -72,8 +120,11 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
             Market Pulse
           </span>
         </div>
-        <span className="text-[9.5px] uppercase tracking-[0.18em] text-text-muted">
-          live
+        <span
+          className="text-[9.5px] uppercase tracking-[0.18em] text-text-muted text-mono"
+          title={`Last update ${secondsAgo}s ago`}
+        >
+          {secondsAgo < 5 ? "live · just now" : `updated ${secondsAgo}s ago`}
         </span>
       </div>
 
@@ -92,6 +143,7 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
       <div className="flex items-end gap-3 mb-3">
         <div className="flex items-baseline gap-1.5">
           <span
+            ref={bpmRef}
             className="text-[44px] sm:text-[52px] font-black text-mono tabular-nums leading-none"
             style={{
               color: labelColor,
@@ -130,6 +182,11 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
           </div>
         </div>
       </div>
+
+      {/* Heat breakdown — show what's driving the BPM. The user complained
+          they don't know what kind of math runs the read; this is the math,
+          visible. Each bar fills 0..1 with its component value. */}
+      <HeatBars pulse={pulse} />
 
       {/* SOL macro + 24h volume */}
       <div className="rounded-xl border border-border-subtle px-3 py-2.5 mb-3 bg-text-muted/[0.03]">
@@ -211,13 +268,75 @@ function Mover({
 
 function pickLabelColor(label: ReturnType<typeof heatLabel>): string {
   switch (label) {
-    case "On fire": return "#c1374a";
-    case "Hot":     return "#d6601a";
-    case "Active":  return "#a3680a";
-    case "Steady":  return "#0a6f47";
-    case "Calm":    return "#0a8f57";
+    case "Extreme": return "#c1374a"; // BV crimson, cardiac
+    case "On fire": return "#d6601a"; // hot orange
+    case "Hot":     return "#b8500a"; // amber
+    case "Active":  return "#8a5800"; // mustard
+    case "Steady":  return "#0a6f47"; // forest green
+    case "Calm":    return "#0a8f57"; // mint
     default:        return "#0a8f57";
   }
+}
+
+/**
+ * Live heat-breakdown bars. Shows the four components feeding into the BPM
+ * so the math is visible instead of a black box. Each bar springs from 0 to
+ * its current value when pulse updates; CSS transitions handle the smooth
+ * width changes between data refreshes.
+ */
+function HeatBars({ pulse }: { pulse: HeatSnapshot }) {
+  // The "extreme" component isn't on breakdown directly — derive from the
+  // top-mover's |% change| same way heat.ts does it.
+  const topAbs = Math.max(
+    Math.abs(pulse.topMover?.price_change_24h ?? 0),
+    Math.abs(pulse.biggestDump?.price_change_24h ?? 0),
+  );
+  const extreme = Math.min(1, topAbs / 80);
+  const items = [
+    { label: "Extreme", value: extreme, color: "#FF2D9C", weight: "40%" },
+    { label: "Spread", value: pulse.breakdown.volatility, color: "#5e5cff", weight: "25%" },
+    { label: "Breadth", value: pulse.breakdown.breadth, color: "#14F195", weight: "20%" },
+    { label: "Volume", value: pulse.breakdown.volume, color: "#FFB938", weight: "15%" },
+  ];
+  return (
+    <div className="rounded-xl bg-text-muted/[0.03] border border-border-subtle px-3 py-2 mb-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[9px] uppercase tracking-[0.20em] text-text-muted font-bold">
+          What's driving it
+        </span>
+        <span className="text-[8.5px] uppercase tracking-[0.20em] text-text-muted font-mono">
+          weighted
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {items.map((it) => (
+          <div key={it.label} className="flex items-center gap-2">
+            <span className="text-[9px] uppercase tracking-[0.14em] font-bold text-text-secondary w-[58px] shrink-0">
+              {it.label}
+            </span>
+            <div className="flex-1 h-[6px] rounded-full bg-text-muted/10 overflow-hidden">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.round(it.value * 100)}%`,
+                  background: `linear-gradient(90deg, ${it.color}77, ${it.color})`,
+                  boxShadow: `0 0 8px ${it.color}55`,
+                  transition:
+                    "width 700ms cubic-bezier(0.22, 1, 0.36, 1), background 400ms ease",
+                }}
+              />
+            </div>
+            <span
+              className="text-[10px] font-mono text-text-muted w-10 text-right tabular-nums"
+              title={`${it.label} contributes ${it.weight} of total heat`}
+            >
+              {(it.value * 100).toFixed(0)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Skeleton() {

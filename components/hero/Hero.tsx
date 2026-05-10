@@ -69,7 +69,7 @@ export function Hero() {
       }
     };
     refresh();
-    const id = setInterval(refresh, 15_000);
+    const id = setInterval(refresh, 8_000);
     return () => {
       cancelled = true;
       clearInterval(id);
