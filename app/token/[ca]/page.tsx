@@ -15,6 +15,7 @@ import { Aurora } from "@/components/shared/Aurora";
 import { EntranceStagger } from "@/components/shared/EntranceStagger";
 import { TokenHeader } from "@/components/token/TokenHeader";
 import { BuySellPressure } from "@/components/token/BuySellPressure";
+import { BondingCurveCard } from "@/components/token/BondingCurveCard";
 import { PriceCard } from "@/components/token/PriceCard";
 import { AISynthesis } from "@/components/token/AISynthesis";
 import { RiskScoreCard } from "@/components/token/RiskScoreCard";
@@ -166,6 +167,14 @@ export default async function TokenPage({ params }: PageProps) {
         <EntranceStagger step={70} startDelay={80}>
           <div data-stagger-child className="mb-7" style={{ opacity: 0 }}>
             <TokenHeader analysis={fastAnalysis} />
+          </div>
+
+          {/* Pump.fun bonding curve — only renders for pump.fun tokens
+              with an active curve PDA. Critical degen scan: where on
+              the curve is this, how close to migration. Self-hides for
+              non-pump tokens. */}
+          <div data-stagger-child style={{ opacity: 0 }}>
+            <BondingCurveCard ca={ca} />
           </div>
 
           {/* Row 1: PriceCard (left, fast) + AI Synthesis (right, slow). The
