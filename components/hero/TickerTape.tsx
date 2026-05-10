@@ -67,24 +67,39 @@ export function TickerTape({
       onMouseEnter={() => animationRef.current?.pause()}
       onMouseLeave={() => animationRef.current?.play()}
     >
-      {/* "LIVE" pip on the left edge, with a pulse ring */}
+      {/* Edge-fade masks. Items appear and disappear into the bg instead
+          of getting clipped at a hard edge. Bumped to w-28 (112px) and
+          opaque-up to 60% so items can't peek out behind the LIVE pip. */}
       <div
-        className="absolute left-3 top-1/2 -translate-y-1/2 z-10 flex items-center gap-2 px-2.5 py-1 rounded-full"
+        className="absolute inset-y-0 left-0 w-28 z-[10] pointer-events-none"
         style={{
-          background: "rgba(255, 45, 156, 0.10)",
-          boxShadow: "inset 0 0 0 1px rgba(255, 45, 156, 0.30)",
+          background:
+            "linear-gradient(90deg, var(--bg-primary) 0%, var(--bg-primary) 60%, transparent 100%)",
+        }}
+      />
+      <div
+        className="absolute inset-y-0 right-0 w-20 z-[10] pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(270deg, var(--bg-primary) 0%, var(--bg-primary) 30%, transparent 100%)",
+        }}
+      />
+
+      {/* "LIVE" pip on the left edge. Sits on top of the mask (z-20) with
+          a SOLID glass background so no scrolling text bleeds through. */}
+      <div
+        className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-center gap-2 px-2.5 py-1 rounded-full"
+        style={{
+          background: "var(--glass-frost)",
+          boxShadow:
+            "inset 0 0 0 1px rgba(255, 45, 156, 0.35), 0 2px 6px rgba(255, 45, 156, 0.12)",
         }}
       >
         <span className="relative flex">
           <span
-            className="absolute inset-0 size-2 rounded-full"
-            style={{ background: "rgba(255, 45, 156, 0.6)" }}
-          >
-            <span
-              className="absolute inset-0 rounded-full animate-ping"
-              style={{ background: "#FF2D9C" }}
-            />
-          </span>
+            className="absolute inset-0 size-2 rounded-full animate-ping"
+            style={{ background: "#FF2D9C", opacity: 0.6 }}
+          />
           <span
             className="relative size-2 rounded-full"
             style={{ background: "#FF2D9C" }}
@@ -95,26 +110,9 @@ export function TickerTape({
         </span>
       </div>
 
-      {/* Edge-fade masks. Items appear and disappear into the bg instead of
-          getting clipped at a hard edge. */}
-      <div
-        className="absolute inset-y-0 left-0 w-20 z-[5] pointer-events-none"
-        style={{
-          background:
-            "linear-gradient(90deg, var(--bg-primary, #FCFCFE) 0%, var(--bg-primary, #FCFCFE) 30%, transparent 100%)",
-        }}
-      />
-      <div
-        className="absolute inset-y-0 right-0 w-20 z-[5] pointer-events-none"
-        style={{
-          background:
-            "linear-gradient(270deg, var(--bg-primary, #FCFCFE) 0%, var(--bg-primary, #FCFCFE) 30%, transparent 100%)",
-        }}
-      />
-
       <div
         ref={trackRef}
-        className="flex items-center gap-6 py-3 pl-24 pr-6"
+        className="flex items-center gap-6 py-3 pl-32 pr-6"
         style={{ width: "fit-content", willChange: "transform" }}
       >
         {doubled.map((t, i) => (

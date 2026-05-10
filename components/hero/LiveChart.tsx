@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { TrendingToken } from "@/types/token";
 
 const HISTORY_WINDOW_MS = 60 * 60 * 1000; // 1 hour visible
@@ -40,6 +41,16 @@ export function LiveChart({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const histRef = useRef<Map<string, TokenHistory>>(new Map());
+  // Per-frame hit targets for clickable labels. We update this in the draw
+  // loop and read on click to figure out which token's label was tapped.
+  const hitTargetsRef = useRef<
+    Array<{ ca: string; symbol: string; x: number; y: number; w: number; h: number }>
+  >([]);
+  // Hover index lives in a ref so the rAF loop can read it without a
+  // re-render every frame. We mirror it to state for the cursor change.
+  const hoverIdxRef = useRef<number | null>(null);
+  const [cursor, setCursor] = useState<"default" | "pointer">("default");
+  const router = useRouter();
 
   // Update histories whenever the tokens prop changes.
   useEffect(() => {
@@ -267,11 +278,21 @@ export function LiveChart({
         }
       }
 
-      // Draw labels
+      // Draw labels. Reset the hit-target list every frame and rebuild it
+      // so click handlers always operate on the current visible positions.
+      const hits: Array<{
+        ca: string;
+        symbol: string;
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+      }> = [];
       ctx.font = "bold 11px ui-sans-serif, system-ui, sans-serif";
       ctx.textBaseline = "middle";
       ctx.textAlign = "left";
-      for (const lab of labels) {
+      for (let labIdx = 0; labIdx < labels.length; labIdx++) {
+        const lab = labels[labIdx];
         // Tip dot at the actual line end
         const tip = lab.trace.points[lab.trace.points.length - 1];
         ctx.fillStyle = lab.trace.hist.color;
@@ -291,22 +312,45 @@ export function LiveChart({
           ctx.globalAlpha = 1;
         }
 
-        // Symbol
+        // Symbol — measure first for the hit target, optionally underlined
+        // when hovered.
+        const symW = ctx.measureText(lab.trace.hist.symbol).width;
+        const isHovered = hoverIdxRef.current === labIdx;
         ctx.fillStyle = lab.trace.hist.color;
         ctx.fillText(lab.trace.hist.symbol, tip.x + 10, lab.y);
+        if (isHovered) {
+          // Soft underline so the user sees it's a link.
+          ctx.strokeStyle = lab.trace.hist.color;
+          ctx.globalAlpha = 0.6;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(tip.x + 10, lab.y + 7);
+          ctx.lineTo(tip.x + 10 + symW, lab.y + 7);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
 
         // % since window start
         const pct = lab.trace.endPct;
-        const symW = ctx.measureText(lab.trace.hist.symbol).width;
         ctx.fillStyle = pct >= 0 ? "#0a8f57" : "#c1374a";
         ctx.font = "bold 10px ui-monospace, monospace";
-        ctx.fillText(
-          `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`,
-          tip.x + 10 + symW + 6,
-          lab.y,
-        );
+        const pctStr = `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+        ctx.fillText(pctStr, tip.x + 10 + symW + 6, lab.y);
+        const pctW = ctx.measureText(pctStr).width;
         ctx.font = "bold 11px ui-sans-serif, system-ui, sans-serif";
+
+        // Hit target spans symbol + space + % so the whole label is
+        // clickable, not just the four-letter symbol.
+        hits.push({
+          ca: lab.trace.hist.ca,
+          symbol: lab.trace.hist.symbol,
+          x: tip.x + 8,
+          y: lab.y - 9,
+          w: symW + 6 + pctW + 6,
+          h: 18,
+        });
       }
+      hitTargetsRef.current = hits;
     };
     raf = requestAnimationFrame(draw);
 
@@ -342,7 +386,37 @@ export function LiveChart({
       </div>
       <canvas
         ref={canvasRef}
-        style={{ display: "block", width: "100%", height: 132 }}
+        style={{ display: "block", width: "100%", height: 132, cursor }}
+        onMouseMove={(e) => {
+          const canvas = e.currentTarget;
+          const rect = canvas.getBoundingClientRect();
+          const x = ((e.clientX - rect.left) / rect.width) * canvas.width / (window.devicePixelRatio || 1);
+          const y = ((e.clientY - rect.top) / rect.height) * canvas.height / (window.devicePixelRatio || 1);
+          const idx = hitTargetsRef.current.findIndex(
+            (t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h,
+          );
+          const next = idx >= 0 ? idx : null;
+          if (hoverIdxRef.current !== next) {
+            hoverIdxRef.current = next;
+            setCursor(next != null ? "pointer" : "default");
+          }
+        }}
+        onMouseLeave={() => {
+          hoverIdxRef.current = null;
+          setCursor("default");
+        }}
+        onClick={(e) => {
+          const canvas = e.currentTarget;
+          const rect = canvas.getBoundingClientRect();
+          const x = ((e.clientX - rect.left) / rect.width) * canvas.width / (window.devicePixelRatio || 1);
+          const y = ((e.clientY - rect.top) / rect.height) * canvas.height / (window.devicePixelRatio || 1);
+          const hit = hitTargetsRef.current.find(
+            (t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h,
+          );
+          if (hit) {
+            router.push(`/token/${hit.ca}`);
+          }
+        }}
       />
     </div>
   );

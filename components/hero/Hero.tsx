@@ -141,23 +141,29 @@ export function Hero() {
           </div>
         </div>
 
-        {/* MIDDLE, three-column dashboard */}
+        {/* MIDDLE, three-column dashboard.
+            Reordered per user request:
+              left   = Market Pulse (BPM + heat breakdown)
+              center = Live Trending list ("Market is hot")
+              right  = Buy/Sell flow particles (LiveFlow)
+            The flow viz lands on the right where the eye scans last,
+            after reading the macro pulse and the ranked tokens. */}
         <div
-          className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,4fr)] gap-4 lg:gap-5 lg:items-center"
+          className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,4fr)_minmax(0,4fr)_minmax(0,5fr)] gap-4 lg:gap-5 lg:items-center"
         >
           <div data-fade-up className="hidden lg:flex justify-end">
             <MarketPulse pulse={snapshot} />
           </div>
 
-          <div
-            data-sphere-in
-            className="flex items-center justify-center min-h-0"
-          >
-            <LiveFlow tokens={tokens} size={sphereSize} heat={heat} />
+          <div data-fade-up className="hidden lg:flex justify-center">
+            <TrendingList limit={5} heat={heat} tokens={tokens} />
           </div>
 
-          <div data-fade-up className="hidden lg:flex justify-start">
-            <TrendingList limit={5} heat={heat} tokens={tokens} />
+          <div
+            data-sphere-in
+            className="flex items-center justify-start min-h-0"
+          >
+            <LiveFlow tokens={tokens} size={sphereSize} heat={heat} />
           </div>
         </div>
 
