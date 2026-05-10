@@ -4,8 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { TrendingToken } from "@/types/token";
 
-const HISTORY_WINDOW_MS = 60 * 60 * 1000; // 1 hour visible
 const MAX_SAMPLES = 90;
+
+/**
+ * Supported timeframes. Each maps to:
+ *   - the window length the chart spans (windowMs)
+ *   - which DexScreener %-change field we use to seed the synthesized
+ *     pre-render history (`price_change_*`)
+ */
+type Timeframe = "5m" | "1h" | "6h" | "24h";
+const TF_MAP: Record<
+  Timeframe,
+  { windowMs: number; changeField: keyof Pick<TrendingToken,
+    "price_change_5m" | "price_change_1h" | "price_change_6h" | "price_change_24h">; label: string }
+> = {
+  "5m":  { windowMs: 5 * 60 * 1000,        changeField: "price_change_5m",  label: "5m" },
+  "1h":  { windowMs: 60 * 60 * 1000,       changeField: "price_change_1h",  label: "1h" },
+  "6h":  { windowMs: 6 * 60 * 60 * 1000,   changeField: "price_change_6h",  label: "6h" },
+  "24h": { windowMs: 24 * 60 * 60 * 1000,  changeField: "price_change_24h", label: "24h" },
+};
 const COLORS = ["#FF2D9C", "#5E5CFF", "#14F195", "#FF8B2D", "#8A6BFF"];
 
 type Sample = { ts: number; price: number };
@@ -41,33 +58,50 @@ export function LiveChart({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const histRef = useRef<Map<string, TokenHistory>>(new Map());
-  // Per-frame hit targets for clickable labels. We update this in the draw
-  // loop and read on click to figure out which token's label was tapped.
   const hitTargetsRef = useRef<
     Array<{ ca: string; symbol: string; x: number; y: number; w: number; h: number }>
   >([]);
-  // Hover index lives in a ref so the rAF loop can read it without a
-  // re-render every frame. We mirror it to state for the cursor change.
   const hoverIdxRef = useRef<number | null>(null);
   const [cursor, setCursor] = useState<"default" | "pointer">("default");
   const router = useRouter();
 
-  // Update histories whenever the tokens prop changes.
+  // Timeframe selector. Picks which DexScreener %-change field to seed
+  // the synthesized history from + the chart's window length. The window
+  // is also read by the draw loop, so this ref keeps it in sync without
+  // re-running the rAF setup.
+  const [tf, setTf] = useState<Timeframe>("1h");
+  const tfRef = useRef<Timeframe>("1h");
+  tfRef.current = tf;
+
+  // When the timeframe changes, dump all histories. The synthesized
+  // trajectories are keyed to the old window length, leaving them around
+  // would make the chart misrender for a few seconds until they refill.
+  useEffect(() => {
+    histRef.current.clear();
+  }, [tf]);
+
+  // Update histories whenever the tokens prop or tf changes.
   useEffect(() => {
     const top = tokens.slice(0, limit);
     const now = Date.now();
     const seen = new Set<string>();
+    const cfg = TF_MAP[tf];
 
     top.forEach((token, idx) => {
       if (token.price_usd == null) return;
       seen.add(token.ca);
       const symbol = (token.symbol ?? "").replace(/^\$/, "").toUpperCase();
-      const change1h = token.price_change_1h ?? 0;
+      const tfChange = (token[cfg.changeField] as number | null | undefined) ?? 0;
       const change24h = token.price_change_24h ?? 0;
       const existing = histRef.current.get(token.ca);
 
       if (!existing) {
-        const samples = synthesize1hHistory(token.price_usd, change1h, 32);
+        const samples = synthesizeHistory(
+          token.price_usd,
+          tfChange,
+          cfg.windowMs,
+          32,
+        );
         histRef.current.set(token.ca, {
           ca: token.ca,
           symbol,
@@ -94,7 +128,7 @@ export function LiveChart({
     for (const ca of Array.from(histRef.current.keys())) {
       if (!seen.has(ca)) histRef.current.delete(ca);
     }
-  }, [tokens, limit]);
+  }, [tokens, limit, tf]);
 
   // Continuous render loop
   useEffect(() => {
@@ -135,7 +169,8 @@ export function LiveChart({
       const drawH = h - padT - padB;
 
       const now = Date.now();
-      const windowStart = now - HISTORY_WINDOW_MS;
+      const currentWindowMs = TF_MAP[tfRef.current].windowMs;
+      const windowStart = now - currentWindowMs;
 
       // Compute each token's % change since its first visible sample, plus the
       // global min/max so we can pick a shared y-axis.
@@ -166,7 +201,7 @@ export function LiveChart({
           const pct = ((s.price / startPrice) - 1) * 100;
           if (pct < globalMin) globalMin = pct;
           if (pct > globalMax) globalMax = pct;
-          const tFrac = (s.ts - windowStart) / HISTORY_WINDOW_MS;
+          const tFrac = (s.ts - windowStart) / currentWindowMs;
           trace.points.push({ x: padL + tFrac * drawW, y: 0, pct });
         }
         trace.endPct = trace.points[trace.points.length - 1].pct;
@@ -370,19 +405,43 @@ export function LiveChart({
           "0 1px 0 rgba(255,255,255,0.7) inset, 0 8px 28px rgba(10, 10, 30, 0.05)",
       }}
     >
-      <div className="flex items-center justify-between px-4 pt-3.5 pb-1.5">
+      <div className="flex items-center justify-between px-4 pt-3.5 pb-1.5 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <span className="relative flex size-1.5">
             <span className="absolute inline-flex h-full w-full rounded-full bg-accent-pulse opacity-75 animate-ping" />
             <span className="relative inline-flex size-1.5 rounded-full bg-accent-pulse" />
           </span>
           <span className="text-[9.5px] uppercase tracking-[0.22em] text-text-secondary font-bold">
-            Live · top movers · 1h
+            Live · top movers · {TF_MAP[tf].label}
           </span>
         </div>
-        <span className="text-[9.5px] uppercase tracking-[0.18em] text-text-muted">
-          % since 1h ago
-        </span>
+        <div className="flex items-center gap-2">
+          {/* Timeframe pills. Each maps to a DexScreener %-change field
+              (5m / 1h / 6h / 24h) and a corresponding window length on
+              the chart. Switching tfs blanks the synthesized histories
+              and re-seeds them so traces align with the new window. */}
+          <div className="flex gap-0.5 rounded-full p-0.5 bg-text-muted/[0.06]">
+            {(["5m", "1h", "6h", "24h"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTf(t)}
+                className="px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-[0.12em] transition"
+                style={{
+                  background:
+                    tf === t ? "var(--text-primary)" : "transparent",
+                  color:
+                    tf === t ? "var(--bg-primary)" : "var(--text-muted)",
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          <span className="text-[9.5px] uppercase tracking-[0.18em] text-text-muted">
+            % since {TF_MAP[tf].label} ago
+          </span>
+        </div>
       </div>
       <canvas
         ref={canvasRef}
@@ -423,29 +482,27 @@ export function LiveChart({
 }
 
 /**
- * Build a synthetic 1h-ago → current trajectory from `price_change_1h`. This
- * is the price evolution over the last hour we DON'T have real samples for —
- * gets gradually replaced by real samples as time passes.
+ * Build a synthetic windowMs-ago → current trajectory from a single
+ * %-change figure (5m / 1h / 6h / 24h whichever the active timeframe
+ * picks). Gets gradually replaced by real samples as time passes.
  */
-function synthesize1hHistory(
+function synthesizeHistory(
   currentPrice: number,
-  change1h: number,
+  changePct: number,
+  windowMs: number,
   count: number,
 ): Sample[] {
-  // If we don't have a 1h figure, scale 24h to 1h linearly as a fallback.
-  // Worst case: gives a flat-ish line, which is honest.
-  const startPrice = currentPrice / (1 + change1h / 100);
+  const startPrice = currentPrice / (1 + changePct / 100);
   const now = Date.now();
   const out: Sample[] = [];
   for (let i = 0; i < count; i++) {
     const tFrac = i / (count - 1);
     const eased = tFrac * tFrac * (3 - 2 * tFrac);
     const trend = startPrice + (currentPrice - startPrice) * eased;
-    // Light noise, scales with volatility, not too wiggly.
     const noiseAmp = Math.abs(currentPrice - startPrice) * 0.035 + currentPrice * 0.0008;
     const noise = (Math.random() - 0.5) * 2 * noiseAmp;
     out.push({
-      ts: now - HISTORY_WINDOW_MS * (1 - tFrac),
+      ts: now - windowMs * (1 - tFrac),
       price: trend + noise,
     });
   }

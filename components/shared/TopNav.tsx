@@ -22,6 +22,16 @@ export function TopNav() {
         </Link>
         <nav className="hidden sm:flex items-center gap-7 text-[13px] text-text-secondary">
           <Link
+            href="/"
+            className="relative hover:text-text-primary transition group"
+          >
+            Home
+            <span
+              className="absolute -bottom-1 left-0 h-[1.5px] w-0 group-hover:w-full transition-all duration-300"
+              style={{ background: "linear-gradient(90deg, #FF2D9C, #5E5CFF)" }}
+            />
+          </Link>
+          <Link
             href="/trending"
             className="relative hover:text-text-primary transition group"
           >
