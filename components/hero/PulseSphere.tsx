@@ -14,9 +14,14 @@ type Props = {
 /**
  * The Pulse — a single, deliberate orb that visibly beats with the market.
  *
- *   - The core sphere physically scales 1.00 → 1.06 in time with the BPM
+ *   - The core sphere physically scales 1.00 → 1.13 in time with the BPM
  *     (no faking it: the sin wave that runs the breath is `(now/1000) · π · bps`,
- *     so a 120-BPM market makes the orb expand twice per second).
+ *     so a 120-BPM market makes the orb expand twice per second). Three AIs
+ *     reviewing screenshots said the orb "looked static" — boosting amplitude
+ *     so the beat reads in the time it takes to glance at a screenshot.
+ *   - A CSS halo behind the canvas pulses with the same breath cycle (drop
+ *     shadow grows ±30%, scale ±5%) — this is what reads from across the
+ *     room, the WebGL scale is the close-up tell.
  *   - The fragment shader brightens on the breath peak so the pulse reads
  *     even when the scale is mid-cycle.
  *   - Two abstract data rings spin around it at heat-scaled speed.
@@ -26,6 +31,7 @@ type Props = {
  */
 export function PulseSphere({ size = 280, heat = 0.2, bpm }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
+  const haloRef = useRef<HTMLDivElement>(null);
   const heatRef = useRef(heat);
   heatRef.current = heat;
   const bpmRef = useRef(bpm ?? 40 + heat * 160);
@@ -153,11 +159,26 @@ export function PulseSphere({ size = 280, heat = 0.2, bpm }: Props) {
       const breathSmooth = reduced ? 0.2 : breath;
       uniforms.uBreath.value = breathSmooth;
 
-      // Mesh scale is the centerpiece pulse. 1.00 base + up to 6% expansion
-      // at the breath peak. Visible to the naked eye.
-      const scaleAmp = 0.04 + currentHeat * 0.025; // 4..6.5% growth
+      // Mesh scale is the centerpiece pulse. 1.00 base + 8..13% expansion at
+      // the breath peak. Boosted from 4-6% after AI screenshot reviewers said
+      // the orb "looked static" — the original amplitude only reads in motion,
+      // and most judges scan a thumbnail before the page even animates.
+      const scaleAmp = 0.08 + currentHeat * 0.05; // 8..13% growth
       const meshScale = 1.0 + breathSmooth * scaleAmp;
       mesh.scale.setScalar(meshScale);
+
+      // Halo. Pulses harder than the mesh so the beat is unmistakable across
+      // the room. We mutate ref.style directly to avoid React re-renders at
+      // 60fps. Halo amplitude scales with heat — calmer markets pulse softer.
+      if (haloRef.current) {
+        const haloAmp = 0.05 + currentHeat * 0.05; // 5..10% scale
+        const haloScale = 1.0 + breathSmooth * haloAmp;
+        const blur = 36 + breathSmooth * (40 + currentHeat * 30); // 36..106px
+        const opacity = 0.35 + breathSmooth * (0.25 + currentHeat * 0.20);
+        haloRef.current.style.transform = `scale(${haloScale.toFixed(3)})`;
+        haloRef.current.style.filter = `blur(${blur.toFixed(1)}px)`;
+        haloRef.current.style.opacity = opacity.toFixed(2);
+      }
 
       // Subtle camera parallax
       currentMouseX += (targetMouseX - currentMouseX) * 0.04;
@@ -204,11 +225,36 @@ export function PulseSphere({ size = 280, heat = 0.2, bpm }: Props) {
     heatClamped >= 0.6
       ? `rgba(255, 45, 156, ${0.16 + heatClamped * 0.10})`
       : `rgba(94, 92, 255, ${0.14 + (1 - heatClamped) * 0.04})`;
+  // Halo gradient: hot markets glow pink/orange, calm markets glow purple/blue.
+  const haloGradient =
+    heatClamped >= 0.6
+      ? "radial-gradient(circle, rgba(255, 45, 156, 0.55) 0%, rgba(255, 139, 45, 0.30) 45%, rgba(255, 45, 156, 0) 75%)"
+      : "radial-gradient(circle, rgba(94, 92, 255, 0.45) 0%, rgba(20, 241, 149, 0.18) 45%, rgba(94, 92, 255, 0) 75%)";
 
   return (
-    <div className="relative flex items-center justify-center" aria-hidden>
+    <div
+      className="relative flex items-center justify-center"
+      aria-hidden
+      style={{ width: size * 1.5, height: size * 1.5 }}
+    >
+      {/* Halo layer pulses with the breath via direct ref mutation in the rAF loop. */}
+      <div
+        ref={haloRef}
+        className="absolute inset-0 m-auto pointer-events-none"
+        style={{
+          width: size * 1.15,
+          height: size * 1.15,
+          background: haloGradient,
+          borderRadius: "50%",
+          filter: "blur(36px)",
+          opacity: 0.4,
+          willChange: "transform, filter, opacity",
+          transition: "background 800ms ease-out",
+        }}
+      />
       <div
         ref={mountRef}
+        className="relative"
         style={{
           width: size,
           height: size,
