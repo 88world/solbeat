@@ -45,6 +45,27 @@ export function computeSignals(a: TokenAnalysis): Signal[] {
     s.push({ label: "Freeze live", value: "balances freezable", severity: "warn", weight: 7 });
   }
 
+  // Smart money. If any of the top-20 holders are KOL/known-smart wallets,
+  // surface that loudly — degens trade on this signal hard. We sum their
+  // % holding so "smart money holds 8%" is a single chip.
+  const smartHolders = a.holders.top_20.filter((h) => {
+    const tag = h.tag as { kind: string; label: string } | undefined;
+    return tag?.kind === "smart";
+  });
+  if (smartHolders.length > 0) {
+    const smartPct = smartHolders.reduce((sum, h) => sum + h.pct, 0);
+    const names = smartHolders
+      .slice(0, 3)
+      .map((h) => h.tag.label.replace(/^Smart · /, ""))
+      .join(", ");
+    s.push({
+      label: "Smart money in",
+      value: `${names} hold ${smartPct.toFixed(1)}%`,
+      severity: "good",
+      weight: 7,
+    });
+  }
+
   // Holder concentration
   const top10 = a.holders.top_10_pct;
   if (top10 != null) {

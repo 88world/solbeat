@@ -19,9 +19,41 @@ export type HolderTag =
   | { kind: "burn"; label: string }
   | { kind: "cex"; label: string }
   | { kind: "stake"; label: string }
+  | { kind: "smart"; label: string }
   | { kind: "whale"; label: string }
   | { kind: "sniper"; label: string }
   | { kind: "fresh"; label: string };
+
+/**
+ * Known KOL / smart-money wallets sourced from kolscan.io's PNL leaderboard.
+ * When one of these appears in a token's top holders, that's a *real* signal
+ * — degens follow these accounts, copy their trades, and front-run their
+ * exits. Surfacing this as a tag is GMGN's killer feature.
+ */
+const SMART_MONEY: Record<string, string> = {
+  Bi4rd5FH5bYEN8scZ7wevxNZyNmKHdaBcvewdPFxYdLt: "theo",
+  "6S8GezkxYUfZy9JPtYnanbcZTMB87Wjt1qx3c6ELajKC": "Nyhrox",
+  BtMBMPkoNbnLF9Xn552guQq528KKXcsNBNNBre3oaQtr: "Letterbomb",
+  CyaE1VxvBrahnPWkqm5VsdCvyS2QmNht2UFrKJHga54o: "Cented",
+  "4BdKaxN8G6ka4GYtQQWk4G4dZRUTX2vQH9GcXdBREFUk": "Jijo",
+  "2fg5QD1eD7rzNNCsvnhmXFm5hqNgwTTG8p7kQ6f3rx6f": "Cupsey",
+  PMJA8UQDyWTFw2Smhyp9jGA6aTaP7jKHR7BPudrgyYN: "chester",
+  "86AEJExyjeNNgcp7GrAvCXTDicf5aGWgoERbXFiG1EdD": "Publix",
+  "39q2g5tTQn9n7KnuapzwS2smSx3NGYqBoea11tBjsGEt": "Walta",
+  "7VBTpiiEjkwRbRGHJFUz6o5fWuhPFtAmy8JGhNqwHNnn": "Brox",
+  "4xY9T1Q7foJzJsJ6YZDSsfp9zkzeZsXnxd45SixduMmr": "zeropnl",
+  "5t9xBNuDdGTGpjaPTx6hKd7sdRJbvtKS8Mhq6qVbo8Qz": "Smokez",
+  Av3xWHJ5EsoLZag6pr7LKbrGgLRTaykXomDD5kBhL9YQ: "Heyitsyolo",
+  FpD6n8gfoZNxyAN6QqNH4TFQdV9vZEgcv5W4H2YL8k4X: "Hesi",
+  B32QbbdDAyhvUQzjcaM5j6ZVKwjCxAwGH5Xgvb9SJqnC: "Kadenox",
+  H72yLkhTnoBfhBTXXaj1RBXuirm8s8G5fcVh2XpQLggM: "Smart trader",
+  AVAZvHLR2PcWpDf8BXY4rVxNHYRBytycHkcB5z5QNXYm: "Smart trader",
+};
+
+/** Public lookup for the SmartMoneySignal computation. */
+export function smartMoneyName(owner: string): string | null {
+  return SMART_MONEY[owner] ?? null;
+}
 
 /**
  * Static map of well-known program / pool / CEX / burn addresses on Solana.
@@ -88,6 +120,11 @@ export function classifyOwner(
   owner: string,
   ctx: ClassifyContext,
 ): HolderTag {
+  // Smart money wins over the standard KNOWN map — these are wallets we
+  // want to highlight even if they're also CEX-adjacent or whatever.
+  const smart = SMART_MONEY[owner];
+  if (smart) return { kind: "smart", label: `Smart · ${smart}` };
+
   const known = KNOWN[owner];
   if (known) return { kind: known.kind, label: known.label };
 
@@ -117,6 +154,9 @@ export function tagStyle(kind: HolderTag["kind"]): { bg: string; color: string }
       return { bg: "rgba(20, 241, 149, 0.10)", color: "#0a8f57" };
     case "stake":
       return { bg: "rgba(20, 241, 149, 0.10)", color: "#0a6f47" };
+    case "smart":
+      // Brand pink = "you should pay attention"
+      return { bg: "rgba(255, 45, 156, 0.14)", color: "#c1374a" };
     case "whale":
       return { bg: "rgba(193, 55, 74, 0.10)", color: "#c1374a" };
     case "sniper":
