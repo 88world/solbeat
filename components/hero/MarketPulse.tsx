@@ -79,7 +79,13 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
 
       {/* ECG */}
       <div className="mb-3 -mx-1">
-        <ECGTrace bpm={bpm} width={320} height={56} color={traceColor} />
+        <ECGTrace
+          bpm={bpm}
+          width={320}
+          height={56}
+          color={traceColor}
+          heat={pulse.heat}
+        />
       </div>
 
       {/* BPM hero row */}
