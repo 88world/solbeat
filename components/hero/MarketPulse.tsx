@@ -280,23 +280,46 @@ function pickLabelColor(label: ReturnType<typeof heatLabel>): string {
 
 /**
  * Live heat-breakdown bars. Shows the four components feeding into the BPM
- * so the math is visible instead of a black box. Each bar springs from 0 to
- * its current value when pulse updates; CSS transitions handle the smooth
- * width changes between data refreshes.
+ * so the math is visible instead of a black box. Components match the
+ * heat.ts formula: SOL macro × 0.40 + breadth × 0.30 + volume × 0.20 +
+ * extreme × 0.10.
  */
 function HeatBars({ pulse }: { pulse: HeatSnapshot }) {
-  // The "extreme" component isn't on breakdown directly — derive from the
-  // top-mover's |% change| same way heat.ts does it.
-  const topAbs = Math.max(
-    Math.abs(pulse.topMover?.price_change_24h ?? 0),
-    Math.abs(pulse.biggestDump?.price_change_24h ?? 0),
-  );
-  const extreme = Math.min(1, topAbs / 80);
+  // SOL component derived inline (matches heat.ts).
+  const solChange = Math.abs(pulse.sol?.price_change_24h ?? 0);
+  const solComponent = Math.min(1, solChange / 25);
+  // Extreme — count of parabolic (>500%) movers, saturates at 5.
+  const parabolic = [
+    pulse.topMover?.price_change_24h,
+    pulse.biggestDump?.price_change_24h,
+  ].filter((c) => c != null && Math.abs(c) >= 500).length;
+  const extreme = Math.min(1, parabolic / 5);
+
   const items = [
-    { label: "Extreme", value: extreme, color: "#FF2D9C", weight: "40%" },
-    { label: "Spread", value: pulse.breakdown.volatility, color: "#5e5cff", weight: "25%" },
-    { label: "Breadth", value: pulse.breakdown.breadth, color: "#14F195", weight: "20%" },
-    { label: "Volume", value: pulse.breakdown.volume, color: "#FFB938", weight: "15%" },
+    {
+      label: "SOL macro",
+      value: solComponent,
+      color: "#14F195",
+      weight: "40%",
+    },
+    {
+      label: "Breadth",
+      value: pulse.breakdown.breadth,
+      color: "#5e5cff",
+      weight: "30%",
+    },
+    {
+      label: "Volume",
+      value: pulse.breakdown.volume,
+      color: "#FFB938",
+      weight: "20%",
+    },
+    {
+      label: "Extreme",
+      value: extreme,
+      color: "#FF2D9C",
+      weight: "10%",
+    },
   ];
   return (
     <div className="rounded-xl bg-text-muted/[0.03] border border-border-subtle px-3 py-2 mb-3">

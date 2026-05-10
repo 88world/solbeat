@@ -42,28 +42,41 @@ export type HeatSnapshot = {
   sol: SolMacro | null;             // SOL price macro reference
 };
 
-// Recalibrated again. Previous version pegged at "tame" BPM (~80) even when
-// the trending list was full of fresh launches doing +500%. The fix:
-//   1. Add an EXTREME component (top-3 mean of |% move|) — captures the
-//      "one coin is RIPPING" signal that median washes out.
-//   2. Fall back through 6h → 1h → 24h when 24h is null. Fresh launches
-//      under 24h old report null for 24h %; we were silently dropping them
-//      from the heat calc, leaving only stale established tokens.
-//   3. Lower volume ref to $100M (the trending sum routinely hits this).
-//   4. Reweight: extreme=0.40, volatility=0.25, breadth=0.20, volume=0.15.
-//      Single ripping token contributes meaningfully without being able to
-//      saturate alone. Broad activity still pushes BPM into the 180s.
-const VOLATILITY_REF = 12;         // median |%| at which volatility = 1
-const EXTREME_REF = 80;            // top-3 mean |%| at which extreme = 1
-const BREADTH_THRESHOLD = 8;       // % move that counts as "meaningful"
-const VOLUME_REF = 100_000_000;    // $100M total at which volume = 1 (log)
-const SENTIMENT_REF = 12;          // avg % at which sentiment saturates
+// Recalibrated AGAIN — third time's the charm. Previous formula had
+// `extreme = mean(top-3 |%moves|) / 80` weighted 40%, which meant any
+// trending list with ONE fresh launch at +500% pegged extreme at 1.0 and
+// pushed BPM to 199. That's wrong: a memecoin doing +500% is the median
+// Solana day, not Trump-tier.
+//
+// New anchoring philosophy: BPM 199 = "the entire ecosystem is screaming."
+// Trump-token-tier. SOL-pumping-25%-tier. Achieved when MULTIPLE signals
+// max out simultaneously, not one outlier.
+//
+//   heat = sol*0.40 + breadth*0.30 + volume*0.20 + extreme*0.10
+//
+// SOL macro is the anchor. When SOL itself moves significantly, the
+// whole Solana ecosystem moves with it. That's the canonical signal.
+// Extreme (fresh-launch parabolic energy) is now hard-capped at 0.10
+// total contribution — it can lift the BPM by ~10 points but can't
+// drive it alone. Breadth uses STRICT 24h moves (drops fresh launches
+// with null 24h), threshold raised so fresh-launch noise doesn't game
+// the score.
+//
+// BPM curve: heat^1.4 (was heat^0.85). The exponent > 1 means the BPM
+// reaches for the high end — heat must be 0.92+ to clear 180. Hitting
+// 199 requires heat 0.99+ which only happens when SOL is breaking its
+// 24h record and 90%+ of established tokens are moving.
+const SOL_REF = 25;                 // |% SOL 24h| at which sol = 1
+const BREADTH_THRESHOLD = 15;       // % 24h move that counts as "meaningful"
+const VOLATILITY_REF = 30;          // median |% 24h| at which volatility = 1
+const VOLUME_REF = 1_000_000_000;   // $1B total trending vol at which volume = 1 (log)
+const SENTIMENT_REF = 12;
+const EXTREME_PARABOLIC_PCT = 500;  // tokens above this contribute to fresh-extreme tally
 
 /**
- * Pick the freshest non-null %-change available for a token. Order of
- * preference: 24h (most stable), 6h, 1h, 5m. Tokens younger than 24h often
- * report null for 24h, falling through to shorter windows keeps them
- * contributing to heat instead of disappearing.
+ * Pick the freshest non-null %-change. Used for the topMover/biggestDump
+ * spotlights and the volatility median. The HEAT components themselves
+ * use strict 24h to avoid fresh-launch noise.
  */
 function bestChange(t: TrendingToken): number | null {
   const candidates = [
@@ -84,62 +97,93 @@ export function computeHeatSnapshot(
 ): HeatSnapshot {
   if (!tokens.length) return { ...EMPTY_SNAPSHOT, sol };
 
-  const changes = tokens
-    .map(bestChange)
+  // STRICT 24h changes for the heat components. Fresh launches that report
+  // null for 24h drop out of these calcs, that's intentional — we don't
+  // want a token that's existed for 4 hours dominating "the macro reads."
+  const strict24h = tokens
+    .map((t) => t.price_change_24h)
     .filter((c): c is number => c != null && Number.isFinite(c));
+
   const volumes = tokens
     .map((t) => t.volume_24h ?? 0)
     .filter((v) => Number.isFinite(v));
 
-  if (changes.length === 0) return { ...EMPTY_SNAPSHOT, sol };
+  // Fall-through changes for spotlight movers + sentiment context.
+  const flexChanges = tokens
+    .map(bestChange)
+    .filter((c): c is number => c != null && Number.isFinite(c));
 
-  // ── Volatility: median |%|. Robust to outliers, only saturates when the
-  // whole list is moving.
-  const absChanges = changes.map(Math.abs);
-  const sortedAbs = [...absChanges].sort((a, b) => a - b);
-  const mid = Math.floor(sortedAbs.length / 2);
-  const median =
-    sortedAbs.length % 2 === 0
-      ? (sortedAbs[mid - 1] + sortedAbs[mid]) / 2
-      : sortedAbs[mid];
-  const volatility = clamp01(median / VOLATILITY_REF);
+  // ── SOL macro anchor (40%) ───────────────────────────────────────────
+  // The canonical Solana sentiment. When SOL itself rips or dumps, the
+  // entire ecosystem moves. Always bigger signal than any individual meme.
+  const solChange = sol?.price_change_24h ?? 0;
+  const solComponent = clamp01(Math.abs(solChange) / SOL_REF);
 
-  // ── Extreme: mean of the top 3 movers' |%|. Captures parabolic single-
-  // token energy. One coin at +500% should bend the BPM upward even if the
-  // rest of the list is asleep, because that one coin IS the market right
-  // now for whoever's watching.
-  const top3 = sortedAbs.slice(-3);
-  const top3Mean = top3.reduce((s, n) => s + n, 0) / Math.max(1, top3.length);
-  const extreme = clamp01(top3Mean / EXTREME_REF);
+  // ── Breadth (30%) ────────────────────────────────────────────────────
+  // Fraction of tokens with strict-24h |%| > 15%. Excludes tokens too
+  // young to have a 24h baseline, so fresh-launch noise can't game it.
+  // 90%+ breadth is an "everyone's moving" read; that's rare and earned.
+  const breadth =
+    strict24h.length > 0
+      ? strict24h.filter((c) => Math.abs(c) > BREADTH_THRESHOLD).length /
+        strict24h.length
+      : 0;
 
-  // ── Breadth: fraction of tokens with meaningful moves ──
-  const moving = changes.filter((c) => Math.abs(c) > BREADTH_THRESHOLD).length;
-  const breadth = moving / changes.length;
-
-  // ── Volume: log-scaled total, normalized ──
+  // ── Volume (20%) ─────────────────────────────────────────────────────
+  // Total trending 24h volume, log-normalized to $1B. Solana DEX daily
+  // volume usually $500M-$2B, so the typical day reads 0.85 here. Volume
+  // saturates fastest of all components — it's a tiebreaker, not the
+  // primary signal.
   const totalVolume = volumes.reduce((s, n) => s + n, 0);
   const volume =
     totalVolume > 0
       ? clamp01(Math.log10(totalVolume + 1) / Math.log10(VOLUME_REF))
       : 0;
 
-  // ── Composite heat. Extreme gets the largest weight because the user
-  // feels one token going parabolic far more than they feel the median
-  // moving from 4% to 6%. Volatility + breadth still anchor the broad
-  // market read.
+  // ── Extreme (10%, hard-capped) ───────────────────────────────────────
+  // Fresh-launch parabolic energy. Uses the FLEX changes (so fresh launches
+  // count) but is hard-capped at 0.10 total weight. One token at +9999% can
+  // contribute ~10 BPM, can't alone drive the read into "Extreme."
+  const parabolicCount = flexChanges.filter(
+    (c) => Math.abs(c) >= EXTREME_PARABOLIC_PCT,
+  ).length;
+  // Saturates at 5 parabolic tokens.
+  const extreme = clamp01(parabolicCount / 5);
+
+  // ── Volatility (kept for breakdown display, NOT in heat formula) ─────
+  // Still surfaced via HeatBreakdown so users see the spread, but folded
+  // into breadth/extreme above for the actual heat math.
+  const absChanges = strict24h.map(Math.abs);
+  const sortedAbs = [...absChanges].sort((a, b) => a - b);
+  const mid = Math.floor(sortedAbs.length / 2);
+  const median =
+    sortedAbs.length === 0
+      ? 0
+      : sortedAbs.length % 2 === 0
+        ? (sortedAbs[mid - 1] + sortedAbs[mid]) / 2
+        : sortedAbs[mid];
+  const volatility = clamp01(median / VOLATILITY_REF);
+
+  // ── Composite heat ──
   const heat = clamp01(
-    extreme * 0.40 +
-      volatility * 0.25 +
-      breadth * 0.20 +
-      volume * 0.15,
+    solComponent * 0.40 +
+      breadth * 0.30 +
+      volume * 0.20 +
+      extreme * 0.10,
   );
 
-  // ── Sentiment: average signed change ──
-  const avgChange = changes.reduce((s, n) => s + n, 0) / changes.length;
+  // ── Sentiment ────────────────────────────────────────────────────────
+  // Average signed change of the strict 24h set, falling back to flex when
+  // strict is empty (very young trending list).
+  const sentimentSet = strict24h.length > 0 ? strict24h : flexChanges;
+  const avgChange =
+    sentimentSet.length > 0
+      ? sentimentSet.reduce((s, n) => s + n, 0) / sentimentSet.length
+      : 0;
   const sentiment = Math.max(-1, Math.min(1, avgChange / SENTIMENT_REF));
 
-  const greenCount = changes.filter((c) => c > 0).length;
-  const redCount = changes.filter((c) => c < 0).length;
+  const greenCount = flexChanges.filter((c) => c > 0).length;
+  const redCount = flexChanges.filter((c) => c < 0).length;
 
   // ── Movers ──
   let topMover: TrendingToken | null = null;
@@ -187,21 +231,24 @@ const EMPTY_SNAPSHOT: HeatSnapshot = {
 };
 
 /**
- * Heart rate mapping with a slight upward bias so parabolic markets actually
- * hit "extreme" (190+ BPM) instead of pegging at 180. heat^0.85 means low
- * heat moves more linearly while high heat reaches further:
+ * Heart rate mapping with a CONCAVE-UP curve, heat^1.4 means the BPM hangs
+ * around the middle of the range until heat is genuinely high. The user
+ * called out that 199 BPM should be Trump-token-tier, not "AGIGUY pumped",
+ * so the curve makes the upper end actually rare.
  *
- *   heat 0.10 → 64 BPM    Calm
- *   heat 0.30 → 99 BPM    Steady
- *   heat 0.50 → 132 BPM   Active
- *   heat 0.70 → 161 BPM   Hot
- *   heat 0.85 → 181 BPM   On fire
- *   heat 0.95 → 194 BPM   Extreme
+ *   heat 0.20 → 56 BPM    Calm
+ *   heat 0.40 → 80 BPM    Steady
+ *   heat 0.60 → 116 BPM   Active
+ *   heat 0.75 → 145 BPM   Hot
+ *   heat 0.85 → 168 BPM   On fire
+ *   heat 0.92 → 185 BPM   On fire
+ *   heat 0.96 → 192 BPM   Extreme
+ *   heat 0.99 → 198 BPM   Extreme   ← Trump-token-tier requires this
  *   heat 1.00 → 200 BPM   Cardiac
  */
 export function heatToBpm(heat: number): number {
   const h = Math.max(0, Math.min(1, heat));
-  return 40 + Math.pow(h, 0.85) * 160;
+  return 40 + Math.pow(h, 1.4) * 160;
 }
 
 export function heatLabel(
