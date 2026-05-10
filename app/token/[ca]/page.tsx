@@ -7,6 +7,7 @@ import {
   analyzeSlow,
   type FastAnalysis,
 } from "@/lib/orchestrator/analyze";
+import { readPulseHistory } from "@/lib/pulse/snapshots";
 import type { TokenAnalysis } from "@/types/token";
 import { TopNav } from "@/components/shared/TopNav";
 import { TokenHeader } from "@/components/token/TokenHeader";
@@ -19,6 +20,7 @@ import { HolderList } from "@/components/token/HolderList";
 import { BubbleMap } from "@/components/token/BubbleMap";
 import { SignalPanel } from "@/components/token/SignalPanel";
 import { SwapPanel } from "@/components/token/SwapPanel";
+import { PulseTimeline } from "@/components/token/PulseTimeline";
 import { shortAddress } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -189,7 +191,12 @@ export default async function TokenPage({ params }: PageProps) {
           <HolderList holders={fast.holders} ca={fast.metadata.ca} />
         </div>
 
-        {/* Row 4: Catalysts full-width. News reads better wide than narrow. */}
+        {/* Row 4a: Pulse timeline. The moat — every prior reading on this CA. */}
+        <Suspense fallback={null}>
+          <PulseTimelineRow ca={ca} />
+        </Suspense>
+
+        {/* Row 4b: Catalysts full-width. News reads better wide than narrow. */}
         <div className="mb-5">
           <Suspense fallback={<CardSkeleton lines={6} />}>
             <CatalystSlow ca={ca} fast={fast} />
@@ -265,6 +272,22 @@ async function CatalystSlow({
 async function TweetsSlow({ ca, fast }: { ca: string; fast: FastAnalysis }) {
   const slow = await analyzeSlow(ca, fast);
   return <RecentTweets tweets={slow.tweets} />;
+}
+
+/**
+ * Pulse timeline row. Lazy-reads the snapshot history from Redis. We render
+ * this AFTER the slow-side has run for a few visits, so we don't block on
+ * first load (the timeline appears empty on the very first visit, fills in
+ * over subsequent visits as analyzeSlow stamps a snapshot each time).
+ */
+async function PulseTimelineRow({ ca }: { ca: string }) {
+  const snapshots = await readPulseHistory(ca).catch(() => []);
+  if (snapshots.length === 0) return null;
+  return (
+    <div className="mb-5">
+      <PulseTimeline snapshots={snapshots} />
+    </div>
+  );
 }
 
 function SynthesisSkeleton() {

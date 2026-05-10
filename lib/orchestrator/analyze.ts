@@ -18,6 +18,8 @@ import {
   computeHeuristicRisk,
   generateRiskScore,
 } from "@/lib/ai/prompts/risk_assessment";
+import { computeSignals, composeVerdict } from "@/lib/pulse/signal";
+import { appendPulseSnapshot, composeSnapshot } from "@/lib/pulse/snapshots";
 
 export async function analyzeToken(ca: string): Promise<TokenAnalysis> {
   return cached(`analysis:${ca}`, TTL.AI_SYNTHESIS_S, () => buildAnalysis(ca));
@@ -162,12 +164,60 @@ async function buildSlow(ca: string, fast: FastAnalysis): Promise<SlowAnalysis> 
     safe(() => generateRiskScore(partial), "claude_risk", warnings),
   ]);
 
+  const finalRisk = risk ?? computeHeuristicRisk(partial);
+  const finalTweets = tweets ?? [];
+  const finalCatalysts = catalysts ?? [];
+
+  // Snapshot the current pulse for the history timeline. Fire-and-forget,
+  // any storage hiccup must not block the UI. Recomputes the SignalPanel
+  // verdict from the same compose logic the component uses, so the timeline
+  // shows what users actually saw.
+  recordPulseSnapshot(ca, fast, finalTweets, finalCatalysts, finalRisk).catch(
+    (err) => console.error("[orchestrator] pulse snapshot failed", err),
+  );
+
   return {
-    tweets: tweets ?? [],
-    catalysts: catalysts ?? [],
-    risk: risk ?? computeHeuristicRisk(partial),
+    tweets: finalTweets,
+    catalysts: finalCatalysts,
+    risk: finalRisk,
     synthesis: synthesis ?? null,
   };
+}
+
+async function recordPulseSnapshot(
+  ca: string,
+  fast: FastAnalysis,
+  tweets: TweetSnippet[],
+  catalysts: CatalystItem[],
+  risk: NonNullable<TokenAnalysis["risk"]>,
+): Promise<void> {
+  const merged: TokenAnalysis = {
+    ...fast,
+    tweets,
+    catalysts,
+    risk,
+    synthesis: null,
+  };
+  const signals = computeSignals(merged);
+  const verdict = composeVerdict(signals);
+  // Take the 3 highest-weight signal labels to render as chips on the timeline.
+  const topLabels = [...signals]
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 3)
+    .map((s) => s.label);
+
+  await appendPulseSnapshot(
+    ca,
+    composeSnapshot({
+      price_usd: fast.market.price_usd,
+      change_24h: fast.market.price_change_24h,
+      risk_score: risk.score,
+      risk_label: risk.label,
+      signal_text: verdict.text,
+      signal_severity: verdict.severity,
+      signals: topLabels,
+    }),
+  );
 }
 
 async function buildAnalysis(ca: string): Promise<TokenAnalysis> {

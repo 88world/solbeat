@@ -49,12 +49,19 @@ export function ECGTrace({
     let raf = 0;
     let last = performance.now();
     let timeSec = 0;
+    // EMA on BPM, target jumps in heat would otherwise snap the rhythm.
+    // Convergence ~1.5s feels natural, like a heart easing into a new pace.
+    let bpmFiltered = bpmRef.current;
 
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
       const dt = Math.min(50, now - last) / 1000;
       last = now;
       timeSec += dt;
+
+      // Smoothly chase the target BPM.
+      const target = Math.max(20, bpmRef.current);
+      bpmFiltered += (target - bpmFiltered) * Math.min(1, dt * 0.7);
 
       const w = width;
       const h = height;
@@ -70,9 +77,9 @@ export function ECGTrace({
 
       // Fixed scroll cadence, visible window is always 4s
       const pxPerSec = w / VISIBLE_SECONDS;
-      const period = 60 / Math.max(20, bpmRef.current);
+      const period = 60 / bpmFiltered;
 
-      const sampleCount = 480; // bumped from 360 for finer curve resolution
+      const sampleCount = 480;
       const points: Array<[number, number]> = new Array(sampleCount + 1);
       for (let i = 0; i <= sampleCount; i++) {
         const x = (i / sampleCount) * w;
@@ -96,27 +103,43 @@ export function ECGTrace({
         ctx.stroke();
       };
 
-      // Glow pass (fat blurred line under the crisp one)
+      // Cinematic left-to-right alpha gradient on the trace, the right edge
+      // (the "now" stylus) reads brightest, the trail fades into the page.
+      // Three rendering passes for an analog-monitor feel.
+      const grad = ctx.createLinearGradient(0, 0, w, 0);
+      grad.addColorStop(0, hexToRgba(color, 0.05));
+      grad.addColorStop(0.55, hexToRgba(color, 0.55));
+      grad.addColorStop(1, color);
+
+      // Pass 1: wide soft glow
       ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      ctx.shadowBlur = 14;
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 2.6;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
       drawSmooth();
 
-      // Crisp top pass
-      ctx.shadowBlur = 0;
-      ctx.lineWidth = 1.4;
+      // Pass 2: bright mid line
+      ctx.shadowBlur = 6;
+      ctx.lineWidth = 1.6;
       drawSmooth();
 
-      // Glowing stylus dot at the right edge, tracks the live waveform
+      // Pass 3: crisp center
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.0;
+      drawSmooth();
+
+      // Glowing stylus dot at the right edge, tracks the live waveform.
+      // Pulses subtly with the breath so it feels alive.
       const lastY = points[points.length - 1][1];
+      const dotPulse = 1 + 0.18 * Math.sin(timeSec * Math.PI * (bpmFiltered / 60) * 2);
       ctx.shadowColor = color;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 16;
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(w - 1.5, lastY, 2.5, 0, Math.PI * 2);
+      ctx.arc(w - 1.5, lastY, 2.6 * dotPulse, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
     };
@@ -163,4 +186,14 @@ function ecgWave(t: number): number {
 function gaussian(t: number, center: number, width: number): number {
   const d = (t - center) / width;
   return Math.exp(-d * d);
+}
+
+/** "#FF2D9C" → "rgba(255, 45, 156, alpha)". Tolerant of 3- or 6-digit hex. */
+function hexToRgba(hex: string, alpha: number): string {
+  let h = hex.replace(/^#/, "");
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { animate, stagger } from "animejs";
-import { PulseSphere } from "./PulseSphere";
+import { PulseFluid } from "./PulseFluid";
 import { TrendingList } from "./TrendingList";
 import { CaPasteBox } from "./CaPasteBox";
 import { MarketPulse } from "./MarketPulse";
@@ -154,7 +154,7 @@ export function Hero() {
             data-sphere-in
             className="flex items-center justify-center min-h-0"
           >
-            <PulseSphere size={sphereSize} heat={heat} bpm={bpm} />
+            <PulseFluid size={sphereSize} heat={heat} bpm={bpm} />
           </div>
 
           <div data-fade-up className="hidden lg:flex justify-start">
