@@ -24,7 +24,7 @@ type TokenHistory = {
  *   X = time (right edge = now).
  *
  * All lines share the same y axis, so winners climb, losers drop, and the
- * lines naturally separate — no more pile-up of overlapping labels at the
+ * lines naturally separate, no more pile-up of overlapping labels at the
  * right edge.
  *
  * Initial render uses each token's `price_change_1h` to synthesize a
@@ -192,7 +192,7 @@ export function LiveChart({
         ctx.fillText(label, padL - 6, y);
       }
 
-      // Zero line — slightly stronger
+      // Zero line, slightly stronger
       ctx.strokeStyle = "rgba(10, 10, 30, 0.18)";
       ctx.lineWidth = 1;
       const yZero = yForPct(0);
@@ -367,7 +367,7 @@ function synthesize1hHistory(
     const tFrac = i / (count - 1);
     const eased = tFrac * tFrac * (3 - 2 * tFrac);
     const trend = startPrice + (currentPrice - startPrice) * eased;
-    // Light noise, scales with volatility — not too wiggly.
+    // Light noise, scales with volatility, not too wiggly.
     const noiseAmp = Math.abs(currentPrice - startPrice) * 0.035 + currentPrice * 0.0008;
     const noise = (Math.random() - 0.5) * 2 * noiseAmp;
     out.push({

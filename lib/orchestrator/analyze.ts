@@ -23,6 +23,153 @@ export async function analyzeToken(ca: string): Promise<TokenAnalysis> {
   return cached(`analysis:${ca}`, TTL.AI_SYNTHESIS_S, () => buildAnalysis(ca));
 }
 
+/**
+ * Two-phase analysis for streaming pages:
+ *   analyzeFast  → metadata + market + holders (~1-2s, just RPC + DexScreener)
+ *   analyzeSlow  → tweets + catalysts + AI synthesis + AI risk (~5-15s)
+ *
+ * Critical-path UI (TokenHeader, PriceCard, HolderList, BubbleMap) renders
+ * from the fast slice while the slow slice streams in via <Suspense>. Saves
+ * the user 10+ seconds of skeleton view on first visit.
+ */
+export type FastAnalysis = Pick<
+  TokenAnalysis,
+  "ca" | "fetched_at" | "metadata" | "market" | "holders" | "warnings"
+>;
+export type SlowAnalysis = Pick<
+  TokenAnalysis,
+  "tweets" | "catalysts" | "risk" | "synthesis"
+>;
+
+export async function analyzeFast(ca: string): Promise<FastAnalysis> {
+  return cached(`analysis_fast:${ca}`, TTL.AI_SYNTHESIS_S, () => buildFast(ca));
+}
+
+export async function analyzeSlow(
+  ca: string,
+  fast: FastAnalysis,
+): Promise<SlowAnalysis> {
+  return cached(`analysis_slow:${ca}`, TTL.AI_SYNTHESIS_S, () =>
+    buildSlow(ca, fast),
+  );
+}
+
+/**
+ * Fast slice. RPC + DexScreener only, no AI, no Perplexity, no Twitter. ~1-2s.
+ * What the user sees first when the page loads.
+ */
+async function buildFast(ca: string): Promise<FastAnalysis> {
+  const warnings: string[] = [];
+
+  const [asset, dexPair, birdeye, mintInfo] = await Promise.all([
+    safe(() => getAsset(ca), "helius_metadata", warnings),
+    safe(() => fetchBestSolanaPair(ca), "dexscreener_pair", warnings),
+    safe(() => fetchTokenOverview(ca), "birdeye_overview", warnings),
+    safe(() => getMintAccount(ca), "mint_account", warnings),
+  ]);
+
+  const metadata: TokenMetadata = {
+    ca,
+    name: asset?.name ?? dexPair?.baseToken.name ?? null,
+    symbol: asset?.symbol ?? dexPair?.baseToken.symbol ?? null,
+    decimals: asset?.decimals ?? mintInfo?.decimals ?? null,
+    supply: asset?.supply ?? mintInfo?.supply ?? null,
+    image: asset?.image ?? dexPair?.info?.imageUrl ?? null,
+    description: asset?.description ?? null,
+    mint_authority: asset?.mint_authority ?? mintInfo?.mintAuthority ?? null,
+    freeze_authority: asset?.freeze_authority ?? mintInfo?.freezeAuthority ?? null,
+    is_mutable: asset?.is_mutable ?? null,
+    age_hours: dexPair?.pairCreatedAt
+      ? Math.max(0, (Date.now() - dexPair.pairCreatedAt) / 3_600_000)
+      : null,
+  };
+
+  const market: TokenMarket = {
+    price_usd:
+      birdeye?.price ?? (dexPair?.priceUsd ? Number(dexPair.priceUsd) : null),
+    price_change_1h: birdeye?.priceChange1h ?? dexPair?.priceChange?.h1 ?? null,
+    price_change_24h:
+      birdeye?.priceChange24h ?? dexPair?.priceChange?.h24 ?? null,
+    price_change_7d: birdeye?.priceChange7d ?? null,
+    market_cap: birdeye?.marketCap ?? dexPair?.marketCap ?? null,
+    fdv: birdeye?.fdv ?? dexPair?.fdv ?? null,
+    volume_24h: birdeye?.volume24h ?? dexPair?.volume?.h24 ?? null,
+    liquidity_usd: birdeye?.liquidity ?? dexPair?.liquidity?.usd ?? null,
+    lp_locked: null,
+    pair_address: dexPair?.pairAddress ?? null,
+    pair_age_hours: dexPair?.pairCreatedAt
+      ? Math.max(0, (Date.now() - dexPair.pairCreatedAt) / 3_600_000)
+      : null,
+    dex: dexPair?.dexId ?? null,
+  };
+
+  const holdersData: TokenHolders = (await safe(
+    () => getTokenHolders(ca, metadata.supply),
+    "helius_holders",
+    warnings,
+  )) ?? { total: null, top_1_pct: null, top_10_pct: null, top_20: [] };
+
+  return {
+    ca,
+    fetched_at: new Date().toISOString(),
+    metadata,
+    market,
+    holders: holdersData,
+    warnings,
+  };
+}
+
+/**
+ * Slow slice. Twitter + Perplexity + 2× Claude. ~5-15s. Streams in via
+ * <Suspense> after the fast slice has already rendered.
+ */
+async function buildSlow(ca: string, fast: FastAnalysis): Promise<SlowAnalysis> {
+  const warnings = fast.warnings;
+  const symbolOrCa = fast.metadata.symbol ?? ca.slice(0, 6);
+
+  const [tweets, catalysts] = await Promise.all([
+    safe<TweetSnippet[]>(
+      () => fetchRecentTweets(symbolOrCa, ca),
+      "twitter_recent",
+      warnings,
+    ),
+    safe<CatalystItem[]>(
+      () => fetchCatalysts(symbolOrCa, ca),
+      "perplexity_catalysts",
+      warnings,
+    ),
+  ]);
+
+  const partial = {
+    metadata: fast.metadata,
+    market: fast.market,
+    holders: fast.holders,
+  };
+
+  const [synthesis, risk] = await Promise.all([
+    safe(
+      () =>
+        generateTokenSynthesis({
+          metadata: fast.metadata,
+          market: fast.market,
+          holders: fast.holders,
+          tweets: tweets ?? [],
+          catalysts: catalysts ?? [],
+        }),
+      "claude_synthesis",
+      warnings,
+    ),
+    safe(() => generateRiskScore(partial), "claude_risk", warnings),
+  ]);
+
+  return {
+    tweets: tweets ?? [],
+    catalysts: catalysts ?? [],
+    risk: risk ?? computeHeuristicRisk(partial),
+    synthesis: synthesis ?? null,
+  };
+}
+
 async function buildAnalysis(ca: string): Promise<TokenAnalysis> {
   const warnings: string[] = [];
 
@@ -30,7 +177,7 @@ async function buildAnalysis(ca: string): Promise<TokenAnalysis> {
     safe(() => getAsset(ca), "helius_metadata", warnings),
     safe(() => fetchBestSolanaPair(ca), "dexscreener_pair", warnings),
     safe(() => fetchTokenOverview(ca), "birdeye_overview", warnings),
-    // getAccountInfo (jsonParsed) — works on public RPC, gives authoritative
+    // getAccountInfo (jsonParsed), works on public RPC, gives authoritative
     // on-chain supply, decimals, mint authority, freeze authority. The cheap
     // path for the data DAS/Helius normally provides.
     safe(() => getMintAccount(ca), "mint_account", warnings),

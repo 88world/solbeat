@@ -12,7 +12,7 @@ export function shortAddress(addr: string, head = 4, tail = 4): string {
 }
 
 export function humanizeNumber(n: number, digits = 2): string {
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   const abs = Math.abs(n);
   if (abs >= 1e12) return `${(n / 1e12).toFixed(digits)}T`;
   if (abs >= 1e9) return `${(n / 1e9).toFixed(digits)}B`;
@@ -24,7 +24,7 @@ export function humanizeNumber(n: number, digits = 2): string {
 }
 
 export function humanizePrice(p: number | null | undefined): string {
-  if (p == null || !Number.isFinite(p)) return "—";
+  if (p == null || !Number.isFinite(p)) return "-";
   if (p >= 1) return `$${p.toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
   if (p >= 0.01) return `$${p.toFixed(4)}`;
   if (p >= 0.0001) return `$${p.toFixed(6)}`;
@@ -43,7 +43,7 @@ export function relativeTime(date: Date | number | string): string {
 }
 
 export function pctChange(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) return "—";
+  if (n == null || !Number.isFinite(n)) return "-";
   const sign = n > 0 ? "+" : "";
   return `${sign}${n.toFixed(2)}%`;
 }

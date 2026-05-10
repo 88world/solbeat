@@ -1,7 +1,13 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { isValidSolanaAddress } from "@/lib/solana/validation";
-import { analyzeToken } from "@/lib/orchestrator/analyze";
+import {
+  analyzeFast,
+  analyzeSlow,
+  type FastAnalysis,
+} from "@/lib/orchestrator/analyze";
+import type { TokenAnalysis } from "@/types/token";
 import { TopNav } from "@/components/shared/TopNav";
 import { TokenHeader } from "@/components/token/TokenHeader";
 import { PriceCard } from "@/components/token/PriceCard";
@@ -26,16 +32,18 @@ export default async function TokenPage({ params }: PageProps) {
   if (!isValidSolanaAddress(ca)) {
     notFound();
   }
-  const analysis = await analyzeToken(ca);
 
-  // No data found — neither metadata nor market data resolved. Probably a
+  // FAST slice loads first, ~1-2s. RPC + DexScreener only.
+  const fast = await analyzeFast(ca);
+
+  // No data found, neither metadata nor market data resolved. Probably a
   // wrong/case-mismatched CA, a token with no DEX liquidity, or a rugged pool.
-  // Show a clear empty state instead of a wall of "—".
+  // Show a clear empty state instead of a wall of "-".
   const noData =
-    !analysis.metadata.name &&
-    !analysis.metadata.symbol &&
-    analysis.market.price_usd == null &&
-    analysis.market.liquidity_usd == null;
+    !fast.metadata.name &&
+    !fast.metadata.symbol &&
+    fast.market.price_usd == null &&
+    fast.market.liquidity_usd == null;
 
   if (noData) {
     return (
@@ -80,7 +88,7 @@ export default async function TokenPage({ params }: PageProps) {
             <div className="mt-6 space-y-3">
               <Reason emoji="🔡">
                 <span className="font-semibold">Wrong case.</span> Solana addresses are
-                case-sensitive — <code className="font-mono">aBc</code> and{" "}
+                case-sensitive, <code className="font-mono">aBc</code> and{" "}
                 <code className="font-mono">ABC</code> are different addresses.
                 Copy the CA again from a trusted source.
               </Reason>
@@ -123,6 +131,17 @@ export default async function TokenPage({ params }: PageProps) {
     );
   }
 
+  // Synthesize a partial TokenAnalysis for the components that take the full
+  // type but only need fast fields. The slow fields stay empty until the
+  // <Suspense> boundary resolves and SlowPanels takes over the right column.
+  const fastAnalysis: TokenAnalysis = {
+    ...fast,
+    tweets: [],
+    catalysts: [],
+    risk: null,
+    synthesis: null,
+  };
+
   return (
     <div
       data-theme="light"
@@ -139,28 +158,84 @@ export default async function TokenPage({ params }: PageProps) {
         </Link>
 
         <div className="mb-8">
-          <TokenHeader analysis={analysis} />
+          <TokenHeader analysis={fastAnalysis} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-5 lg:gap-7">
           <div className="space-y-5">
-            <PriceCard analysis={analysis} />
-            <BubbleMap ca={analysis.metadata.ca} />
-            <HolderList holders={analysis.holders} ca={analysis.metadata.ca} />
+            <PriceCard analysis={fastAnalysis} />
+            <BubbleMap ca={fast.metadata.ca} />
+            <HolderList holders={fast.holders} ca={fast.metadata.ca} />
           </div>
 
           <div className="space-y-5">
-            <AISynthesis synthesis={analysis.synthesis} />
-            <SignalPanel analysis={analysis} />
-            <RiskScoreCard analysis={analysis} />
-            <CatalystFeed catalysts={analysis.catalysts} />
-            <RecentTweets tweets={analysis.tweets} />
+            <Suspense fallback={<SlowPanelsSkeleton />}>
+              <SlowPanels ca={ca} fast={fast} />
+            </Suspense>
           </div>
         </div>
 
-        <SwapPanel analysis={analysis} />
+        <SwapPanel analysis={fastAnalysis} />
       </main>
     </div>
+  );
+}
+
+/**
+ * Slow panels stream in once Twitter + Perplexity + Claude resolve. Wrapped
+ * in <Suspense> at the page level so the fast slice (TokenHeader, PriceCard,
+ * BubbleMap, HolderList) renders immediately and isn't blocked on AI.
+ */
+async function SlowPanels({ ca, fast }: { ca: string; fast: FastAnalysis }) {
+  const slow = await analyzeSlow(ca, fast);
+  const merged: TokenAnalysis = {
+    ...fast,
+    tweets: slow.tweets,
+    catalysts: slow.catalysts,
+    risk: slow.risk,
+    synthesis: slow.synthesis,
+  };
+  return (
+    <>
+      <AISynthesis synthesis={slow.synthesis} />
+      <SignalPanel analysis={merged} />
+      <RiskScoreCard analysis={merged} />
+      <CatalystFeed catalysts={slow.catalysts} />
+      <RecentTweets tweets={slow.tweets} />
+    </>
+  );
+}
+
+function SlowPanelsSkeleton() {
+  return (
+    <>
+      <div className="glass rounded-2xl p-5 sm:p-6 animate-shimmer">
+        <div className="h-3 w-20 rounded bg-text-muted/10 mb-4" />
+        <div className="space-y-2">
+          <div className="h-3 w-full rounded bg-text-muted/8" />
+          <div className="h-3 w-5/6 rounded bg-text-muted/8" />
+          <div className="h-3 w-4/6 rounded bg-text-muted/8" />
+        </div>
+      </div>
+      <div className="glass rounded-2xl p-5 sm:p-6 animate-shimmer">
+        <div className="h-3 w-16 rounded bg-text-muted/10 mb-4" />
+        <div className="h-4 w-3/4 rounded bg-text-muted/10 mb-3" />
+        <div className="flex gap-2 flex-wrap">
+          <div className="h-6 w-24 rounded-full bg-text-muted/8" />
+          <div className="h-6 w-28 rounded-full bg-text-muted/8" />
+          <div className="h-6 w-20 rounded-full bg-text-muted/8" />
+        </div>
+      </div>
+      <div className="glass rounded-2xl p-5 sm:p-6 animate-shimmer">
+        <div className="flex items-center gap-5">
+          <div className="size-24 rounded-full bg-text-muted/10" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-20 rounded bg-text-muted/10" />
+            <div className="h-3 w-full rounded bg-text-muted/8" />
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

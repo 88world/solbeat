@@ -55,18 +55,59 @@ export async function fetchBestSolanaPair(mint: string): Promise<DexPair | null>
 //
 // The previous q=SOL approach returned imposter tokens whose symbol is
 // "SOL" (different mints, same string). This DEX-targeted approach gives
-// us aura ($27M), RAY ($4M), ZEREBRO ($3M), GIGA ($1.4M) — actual movers.
+// us aura ($27M), RAY ($4M), ZEREBRO ($3M), GIGA ($1.4M), actual movers.
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 const SKIP_BASE_MINTS = new Set([SOL_MINT, USDC_MINT, USDT_MINT]);
-// Symbols imposter tokens like to use — exclude these as base tokens.
+// Symbols imposter tokens like to use, exclude these as base tokens.
 const SKIP_BASE_SYMBOLS = new Set([
   "SOL", "WSOL", "USDC", "USDT", "USDE", "DAI",
 ]);
 const ACCEPTED_QUOTES = new Set(["SOL", "WSOL", "USDC"]);
-const MIN_VOLUME_24H = 100_000;
+const MIN_VOLUME_24H = 50_000; // lowered from 100k so fresh launches with $50-100k 24h vol but heavy 1h activity make the cut
+
+/**
+ * Trending score, mirrors what DexScreener's homepage rank does.
+ *
+ * The previous code sorted by raw 24h volume, which always returns the
+ * established large-caps (PUMP, ORCA, FARTCOIN) and never the actually-
+ * trending fresh launches (AGIGUY +757%, AGI +1859%, DCB -78%) that have
+ * smaller absolute volume but explosive recent activity. Real "trending"
+ * is recent + active + moving, not biggest-by-volume.
+ *
+ * Weights, tuned to match what shows up on dexscreener.com/?rankBy=trendingScoreH6:
+ *   - Recent transaction count (h1) gets the most leverage, that's what
+ *     "trending right now" actually means.
+ *   - 6h transaction count adds context (sustained interest, not a 1-min spike).
+ *   - Absolute price move at h1 + h6 captures both pumps and dumps.
+ *   - 24h volume kept as a tiebreaker, not the dominant signal.
+ *   - Fresh launches (<7d) get a small bonus, established (>30d) a small penalty.
+ */
+function computeTrendingScore(p: DexPair): number {
+  const txnsH1 = (p.txns?.h1?.buys ?? 0) + (p.txns?.h1?.sells ?? 0);
+  const txnsH6 = (p.txns?.h6?.buys ?? 0) + (p.txns?.h6?.sells ?? 0);
+  const volH24 = p.volume?.h24 ?? 0;
+  const chgH1 = Math.abs(p.priceChange?.h1 ?? 0);
+  const chgH6 = Math.abs(p.priceChange?.h6 ?? 0);
+
+  // log scale so a 100x txn count doesn't completely dominate.
+  const txnComponent = Math.log10(txnsH1 + 1) * 30 + Math.log10(txnsH6 + 1) * 8;
+  const volComponent = Math.log10(volH24 + 1) * 6;
+  // Cap absurd moves so a 9999% pump doesn't drown out everything else.
+  const moveComponent = Math.min(chgH1, 500) * 0.5 + Math.min(chgH6, 500) * 0.15;
+
+  let ageBonus = 0;
+  if (p.pairCreatedAt) {
+    const ageH = (Date.now() - p.pairCreatedAt) / 3_600_000;
+    if (ageH < 24 * 7) ageBonus = 15; // <7d, fresh-launch boost
+    else if (ageH < 24 * 30) ageBonus = 5; // 7-30d, mild boost
+    else if (ageH > 24 * 365) ageBonus = -8; // >1yr, mild penalty
+  }
+
+  return txnComponent + volComponent + moveComponent + ageBonus;
+}
 
 const TRENDING_FALLBACK_SEEDS = [
   "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", // BONK
@@ -78,67 +119,48 @@ const TRENDING_FALLBACK_SEEDS = [
 ];
 
 export async function fetchTrending(): Promise<TrendingToken[]> {
-  const collected: DexPair[] = [];
-
-  // Querying DEX names returns pairs with that dexId — high-volume Solana pools.
-  const queries = ["raydium", "meteora", "pump", "orca"];
-  const responses = await Promise.all(
-    queries.map((q) =>
-      fetch(`${BASE}/latest/dex/search?q=${encodeURIComponent(q)}`, {
-        next: { revalidate: 60 },
-      })
-        .then((r) => (r.ok ? (r.json() as Promise<DexSearchResponse>) : null))
-        .catch(() => null),
-    ),
-  );
-  for (const json of responses) {
-    if (json?.pairs) collected.push(...json.pairs);
-  }
-
-  const filtered = collected.filter((p) => {
-    if (p.chainId !== "solana") return false;
-    if (SKIP_BASE_MINTS.has(p.baseToken.address)) return false;
-    const baseSym = (p.baseToken.symbol ?? "").toUpperCase();
-    if (SKIP_BASE_SYMBOLS.has(baseSym)) return false;
-    const quoteSym = (p.quoteToken.symbol ?? "").toUpperCase();
-    if (!ACCEPTED_QUOTES.has(quoteSym)) return false;
-    const vol = p.volume?.h24 ?? 0;
-    if (vol < MIN_VOLUME_24H) return false;
-    return true;
-  });
-
-  // Dedupe per base token — keep the pair with the highest 24h volume.
-  const byToken = new Map<string, DexPair>();
-  for (const p of filtered) {
-    const existing = byToken.get(p.baseToken.address);
-    if (!existing || (p.volume?.h24 ?? 0) > (existing.volume?.h24 ?? 0)) {
-      byToken.set(p.baseToken.address, p);
-    }
-  }
-
-  const ranked = Array.from(byToken.values()).sort(
-    (a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0),
-  );
+  const pairs = await collectSolanaPairs();
+  const ranked = pairs
+    .slice()
+    .sort((a, b) => computeTrendingScore(b) - computeTrendingScore(a));
 
   // Belt-and-suspenders: if search returned almost nothing, mix in staple seeds.
   if (ranked.length < 6) {
     const fallback = await fetchPairsByMints(TRENDING_FALLBACK_SEEDS);
+    const seen = new Set(ranked.map((p) => p.baseToken.address));
     for (const p of fallback) {
-      if (!byToken.has(p.baseToken.address)) {
-        ranked.push(p);
-        byToken.set(p.baseToken.address, p);
-      }
+      if (!seen.has(p.baseToken.address)) ranked.push(p);
     }
-    ranked.sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
+    ranked.sort((a, b) => computeTrendingScore(b) - computeTrendingScore(a));
   }
 
-  return ranked.slice(0, LIMITS.TRENDING_RING_COUNT).map<TrendingToken>((p) => mapPairToToken(p));
+  return ranked
+    .slice(0, LIMITS.TRENDING_RING_COUNT)
+    .map<TrendingToken>((p) => mapPairToToken(p));
 }
 
-/** Wider trending fetch for the leaderboard page — same logic, more results. */
-export async function fetchTrendingFull(limit = 50): Promise<TrendingToken[]> {
+/**
+ * Pull Solana pairs from a wide swath of DEX queries + popular search terms,
+ * dedupe per base token, filter to real markets. Used by fetchTrending and
+ * fetchTrendingFull. Includes pumpfun/pumpswap/letsbonk so fresh launches on
+ * those launchpads don't get filtered out.
+ */
+async function collectSolanaPairs(): Promise<DexPair[]> {
   const collected: DexPair[] = [];
-  const queries = ["raydium", "meteora", "pump", "orca"];
+  // Cast a wide net, the actual ranking happens via computeTrendingScore.
+  // Solana, sol, and the common quote symbols help surface tokens whose dexId
+  // doesn't match a known label (newer launchpads, etc.).
+  const queries = [
+    "raydium",
+    "meteora",
+    "pumpfun",
+    "pump",
+    "pumpswap",
+    "orca",
+    "letsbonk",
+    "solana",
+    "sol",
+  ];
   const responses = await Promise.all(
     queries.map((q) =>
       fetch(`${BASE}/latest/dex/search?q=${encodeURIComponent(q)}`, {
@@ -164,16 +186,25 @@ export async function fetchTrendingFull(limit = 50): Promise<TrendingToken[]> {
     return true;
   });
 
+  // Dedupe per base token, keep the pair with the highest trending score so
+  // we represent the most-active pool for any token that has multiple pools.
   const byToken = new Map<string, DexPair>();
   for (const p of filtered) {
     const existing = byToken.get(p.baseToken.address);
-    if (!existing || (p.volume?.h24 ?? 0) > (existing.volume?.h24 ?? 0)) {
+    if (!existing || computeTrendingScore(p) > computeTrendingScore(existing)) {
       byToken.set(p.baseToken.address, p);
     }
   }
 
-  return Array.from(byToken.values())
-    .sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0))
+  return Array.from(byToken.values());
+}
+
+/** Wider trending fetch for the leaderboard page, same trending-score ranking, more results. */
+export async function fetchTrendingFull(limit = 50): Promise<TrendingToken[]> {
+  const pairs = await collectSolanaPairs();
+  return pairs
+    .slice()
+    .sort((a, b) => computeTrendingScore(b) - computeTrendingScore(a))
     .slice(0, limit)
     .map((p) => mapPairToToken(p));
 }
@@ -205,7 +236,7 @@ function mapPairToToken(p: DexPair): TrendingToken {
   };
 }
 
-/** SOL macro — price + 24h change + 24h volume from the deepest SOL/USDC pair. */
+/** SOL macro, price + 24h change + 24h volume from the deepest SOL/USDC pair. */
 export type SolMacro = {
   price_usd: number | null;
   price_change_24h: number | null;

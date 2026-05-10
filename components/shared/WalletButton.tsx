@@ -10,7 +10,7 @@ export function WalletButton() {
   const { setVisible } = useWalletModal();
   const [mounted, setMounted] = useState(false);
 
-  // Prevent SSR/CSR mismatch — wallet state is browser-only.
+  // Prevent SSR/CSR mismatch, wallet state is browser-only.
   useEffect(() => setMounted(true), []);
   if (!mounted) {
     return (

@@ -6,7 +6,7 @@ import { humanizeNumber } from "@/lib/utils";
 /**
  * The wallet's one-line verdict + signal pills, computed from data we
  * already fetched (held tokens + empty-account count). Same severity
- * scheme as the token SignalPanel — keeps the visual language consistent
+ * scheme as the token SignalPanel, keeps the visual language consistent
  * across product surfaces. Zero AI tokens, all rule-based.
  *
  * What it tells you in 2 seconds:
@@ -228,13 +228,13 @@ function composeSignals(s: WalletStats): Signal[] {
 function composeVerdict(s: WalletStats, signals: Signal[]): { text: string; color: string } {
   if (s.tokenCount === 0) {
     return {
-      text: "Empty wallet — nothing held, nothing to read.",
+      text: "Empty wallet. Nothing held, nothing to read.",
       color: "#4a4a5e",
     };
   }
   if (s.totalValue === 0 && s.bagCount > 0) {
     return {
-      text: `${s.bagCount} bags, no liquid value left — bear with us, you might still reclaim rent.`,
+      text: `${s.bagCount} bags with no liquid value left. Bear with us, you might still reclaim rent.`,
       color: "#d6601a",
     };
   }
@@ -260,7 +260,7 @@ function composeVerdict(s: WalletStats, signals: Signal[]): { text: string; colo
 
   if (!top) {
     return {
-      text: `${s.tokenCount} positions, ${dayDir} on the day.`,
+      text: `${s.tokenCount} positions. ${capitalize(dayDir)} on the day.`,
       color: dayColor,
     };
   }
@@ -268,31 +268,31 @@ function composeVerdict(s: WalletStats, signals: Signal[]): { text: string; colo
   // Personalize a few high-signal cases.
   if (top.label === "Whale") {
     return {
-      text: `Whale wallet — $${humanizeNumber(s.totalValue)} across ${s.tokenCount} positions, ${dayDir}.`,
+      text: `Whale wallet. $${humanizeNumber(s.totalValue)} across ${s.tokenCount} positions, ${dayDir} today.`,
       color: dayColor,
     };
   }
   if (top.label === "Concentrated bet") {
     return {
-      text: `${s.topConcentrationPct.toFixed(0)}% in one bag — high conviction or just stuck. ${dayDir.charAt(0).toUpperCase() + dayDir.slice(1)} today.`,
+      text: `${s.topConcentrationPct.toFixed(0)}% in one bag. High conviction or just stuck. ${capitalize(dayDir)} today.`,
       color: dayColor,
     };
   }
   if (top.label === "Mid-cap holder") {
     return {
-      text: `Mid-cap holder, ${s.tokenCount} positions, portfolio ${dayDir}.`,
+      text: `Mid-cap holder. ${s.tokenCount} positions, portfolio ${dayDir}.`,
       color: dayColor,
     };
   }
   if (top.label === "Reclaimable SOL") {
     return {
-      text: `${s.emptyCount} dead accounts — there's SOL to reclaim. Check the Hidden SOL tab.`,
+      text: `${s.emptyCount} dead accounts. There's SOL to reclaim. Check the Hidden SOL tab.`,
       color: "#0a8f57",
     };
   }
   if (top.label === "Stuck bags") {
     return {
-      text: `${s.bagCount} illiquid bags weighing this wallet down — ${dayDir}.`,
+      text: `${s.bagCount} illiquid bags weighing this wallet down. ${capitalize(dayDir)}.`,
       color: "#d6601a",
     };
   }
@@ -300,6 +300,10 @@ function composeVerdict(s: WalletStats, signals: Signal[]): { text: string; colo
     text: `${top.label} · ${s.tokenCount} positions, ${dayDir}.`,
     color: dayColor,
   };
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function Stat({

@@ -8,7 +8,7 @@ import type { TrendingToken } from "@/types/token";
 import { ECGTrace } from "./ECGTrace";
 
 /**
- * Market vitals — concrete numbers a Solana trader actually scans for, no
+ * Market vitals, concrete numbers a Solana trader actually scans for, no
  * abstract "Volatility / Breadth / Volume" bars:
  *
  *   - ECG trace at the top, scrolling at the live BPM cadence
@@ -181,7 +181,7 @@ function Mover({
   if (!token) {
     return (
       <div className="flex items-center gap-1.5 text-text-muted">
-        <span className="text-[10px]">—</span>
+        <span className="text-[10px]">-</span>
       </div>
     );
   }

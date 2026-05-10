@@ -12,15 +12,15 @@ type Props = {
 };
 
 /**
- * The Pulse — a single, deliberate orb that visibly beats with the market.
+ * The Pulse, a single, deliberate orb that visibly beats with the market.
  *
  *   - The core sphere physically scales 1.00 → 1.13 in time with the BPM
  *     (no faking it: the sin wave that runs the breath is `(now/1000) · π · bps`,
  *     so a 120-BPM market makes the orb expand twice per second). Three AIs
- *     reviewing screenshots said the orb "looked static" — boosting amplitude
+ *     reviewing screenshots said the orb "looked static", boosting amplitude
  *     so the beat reads in the time it takes to glance at a screenshot.
  *   - A CSS halo behind the canvas pulses with the same breath cycle (drop
- *     shadow grows ±30%, scale ±5%) — this is what reads from across the
+ *     shadow grows ±30%, scale ±5%), this is what reads from across the
  *     room, the WebGL scale is the close-up tell.
  *   - The fragment shader brightens on the breath peak so the pulse reads
  *     even when the scale is mid-cycle.
@@ -132,6 +132,7 @@ export function PulseSphere({ size = 280, heat = 0.2, bpm }: Props) {
     let currentHeat = 0;
     let currentHover = 0;
     let currentMouseX = 0;
+    let breathFiltered = 0; // EMA on the breath envelope, smooths heat-induced amplitude changes
     let currentMouseY = 0;
 
     const tick = (now: number) => {
@@ -142,7 +143,7 @@ export function PulseSphere({ size = 280, heat = 0.2, bpm }: Props) {
 
       uniforms.uTime.value += dt;
 
-      // Heat lerps toward target — visible response when market shifts.
+      // Heat lerps toward target, visible response when market shifts.
       const targetHeat = Math.max(0, Math.min(1, heatRef.current));
       currentHeat += (targetHeat - currentHeat) * Math.min(1, dt * 1.2);
       uniforms.uHeat.value = reduced ? Math.min(0.4, currentHeat) : currentHeat;
@@ -152,29 +153,41 @@ export function PulseSphere({ size = 280, heat = 0.2, bpm }: Props) {
 
       // ── The visible heartbeat. ──
       // sine wave at exactly bps frequency → the orb expands and contracts in
-      // real time with the BPM. Reduced-motion pins it at a calm 0.2.
+      // Reduced-motion pins it at a calm 0.2.
       const bps = bpmRef.current / 60;
       const breathPhase = (now / 1000) * Math.PI * bps * 2; // full cycle = 60/bpm
-      const breath = (Math.sin(breathPhase) + 1.0) * 0.5;
-      const breathSmooth = reduced ? 0.2 : breath;
+
+      // Smoothstep envelope. Pure sine reads mechanical at fixed BPM (saw-
+      // tooth-feeling "in-out-in-out"), so we shape it: raw sine into
+      // [0..1], then smoothstep softens the peaks and troughs into a
+      // breathing curve, slow rise, slow fall, no flat plateau, no sharp
+      // turnaround. User feedback: "more fluid, more smooth."
+      const rawBreath = (Math.sin(breathPhase) + 1.0) * 0.5;
+      const shapedBreath = rawBreath * rawBreath * (3 - 2 * rawBreath); // smoothstep
+
+      // EMA on top so heat changes don't snap the amplitude. Persists across
+      // frames via a closure, dt-aware so it stays smooth at any framerate.
+      breathFiltered += (shapedBreath - breathFiltered) * Math.min(1, dt * 8);
+      const breathSmooth = reduced ? 0.2 : breathFiltered;
       uniforms.uBreath.value = breathSmooth;
 
-      // Mesh scale is the centerpiece pulse. 1.00 base + 8..13% expansion at
-      // the breath peak. Boosted from 4-6% after AI screenshot reviewers said
-      // the orb "looked static" — the original amplitude only reads in motion,
-      // and most judges scan a thumbnail before the page even animates.
-      const scaleAmp = 0.08 + currentHeat * 0.05; // 8..13% growth
+      // Mesh scale is the centerpiece pulse. 1.00 base + 5..8% expansion at
+      // the breath peak. Tuned down from 8-13% after the user said the
+      // amplitude looked off, the halo behind the orb is what reads from
+      // far away anyway. Smoothstep envelope keeps the ramp fluid.
+      const scaleAmp = 0.05 + currentHeat * 0.03; // 5..8% growth
       const meshScale = 1.0 + breathSmooth * scaleAmp;
       mesh.scale.setScalar(meshScale);
 
-      // Halo. Pulses harder than the mesh so the beat is unmistakable across
-      // the room. We mutate ref.style directly to avoid React re-renders at
-      // 60fps. Halo amplitude scales with heat — calmer markets pulse softer.
+      // Halo. Carries most of the visible pulse so the orb itself can stay
+      // gentle. We mutate ref.style directly to avoid React re-renders at
+      // 60fps. Halo amplitude scales with heat, calmer markets pulse softer.
       if (haloRef.current) {
-        const haloAmp = 0.05 + currentHeat * 0.05; // 5..10% scale
+        const haloAmp = 0.06 + currentHeat * 0.06; // 6..12% scale
         const haloScale = 1.0 + breathSmooth * haloAmp;
-        const blur = 36 + breathSmooth * (40 + currentHeat * 30); // 36..106px
-        const opacity = 0.35 + breathSmooth * (0.25 + currentHeat * 0.20);
+        // Narrower blur range, the prior 36-106px range was too jumpy.
+        const blur = 38 + breathSmooth * (24 + currentHeat * 18); // 38..80px
+        const opacity = 0.40 + breathSmooth * (0.18 + currentHeat * 0.14);
         haloRef.current.style.transform = `scale(${haloScale.toFixed(3)})`;
         haloRef.current.style.filter = `blur(${blur.toFixed(1)}px)`;
         haloRef.current.style.opacity = opacity.toFixed(2);
@@ -346,7 +359,7 @@ const FRAG = /* glsl */ `
     // ── Lighting setup: KEY light from upper-right + RIM light from lower-left ──
     // Two-light setup gives the sphere genuine three-dimensionality. The rim
     // light on the dark side adds a counter-color that breaks the
-    // "uniform bowling ball" look — the side facing away from the key isn't
+    // "uniform bowling ball" look, the side facing away from the key isn't
     // black, it has a cool glow from the back.
     vec3 keyDir  = normalize(vec3( 0.55,  0.85,  1.00));
     vec3 backDir = normalize(vec3(-0.65, -0.40, -0.30));
@@ -354,7 +367,7 @@ const FRAG = /* glsl */ `
     float NdotKey  = dot(N, keyDir);
     float NdotBack = dot(N, backDir);
 
-    // Half-Lambert on key — soft wraparound diffuse
+    // Half-Lambert on key, soft wraparound diffuse
     float halfLamb = NdotKey * 0.5 + 0.5;
     halfLamb = halfLamb * halfLamb;
 
@@ -362,26 +375,26 @@ const FRAG = /* glsl */ `
     float backRim = max(0.0, NdotBack);
     backRim = pow(backRim, 2.0);
 
-    // Fresnel — strong rim, defines silhouette
+    // Fresnel, strong rim, defines silhouette
     float ndotv = clamp(dot(V, N), 0.0, 1.0);
     float fres = 1.0 - ndotv;
     float fresRim = pow(fres, 2.0);
 
     // ── Color palette ──
-    // Deep, restrained cores — never max saturation.
+    // Deep, restrained cores, never max saturation.
     vec3 coldCore = vec3(0.08, 0.12, 0.55);
     vec3 hotCore  = vec3(0.42, 0.10, 0.36);
     vec3 baseCore = mix(coldCore, hotCore, uHeat);
 
-    // Bright rim accents — fresnel multiplies these (hot-side glow on the curve).
+    // Bright rim accents, fresnel multiplies these (hot-side glow on the curve).
     vec3 coldRim = vec3(0.60, 0.62, 1.00);
     vec3 hotRim  = vec3(1.00, 0.44, 0.70);
     vec3 keyRim = mix(coldRim, hotRim, uHeat);
 
-    // Counter-color back rim — opposite of the heat color so the dark side
+    // Counter-color back rim, opposite of the heat color so the dark side
     // doesn't go black. At heat 1.0 (hot/pink), the back glows COOL (cyan-blue).
     // At heat 0.0 (cold/blue), the back glows WARM (peach-pink). This is the
-    // single biggest fix to "uniform color blob" — surfaces always have a
+    // single biggest fix to "uniform color blob", surfaces always have a
     // counter-light from the back.
     vec3 hotBack  = vec3(0.20, 0.55, 0.95);   // cool cyan-blue when sphere is hot
     vec3 coldBack = vec3(0.95, 0.55, 0.65);   // warm peach when sphere is cold
@@ -402,9 +415,9 @@ const FRAG = /* glsl */ `
     col += backTint * backRim * 0.32;
     // Specular sheen
     col += vec3(1.0) * spec * 0.22;
-    // Fresnel rim — strong, defines silhouette
+    // Fresnel rim, strong, defines silhouette
     col += keyRim * fresRim * 0.85;
-    // Breath glow on the rim — color lift on each beat
+    // Breath glow on the rim, color lift on each beat
     col += keyRim * uBreath * 0.22 * (0.4 + uHeat * 0.6);
 
     // Hover lift
@@ -412,7 +425,7 @@ const FRAG = /* glsl */ `
 
     // Glass: more translucent so the light bg shows through, especially at the
     // rim. The front face is mostly opaque so the lighting reads, but the
-    // edge fades — gives the orb genuine depth instead of looking solid.
+    // edge fades, gives the orb genuine depth instead of looking solid.
     float alpha = 0.78 + fres * 0.20;
     gl_FragColor = vec4(col, alpha);
   }

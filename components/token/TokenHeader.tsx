@@ -50,7 +50,7 @@ export function TokenHeader({ analysis }: { analysis: TokenAnalysis }) {
                 "linear-gradient(135deg, #ff2d9c 0%, #5e5cff 60%, #14f195 100%)",
             }}
           >
-            {symbol.slice(0, 3) || "—"}
+            {symbol.slice(0, 3) || "-"}
           </div>
         )}
       </div>
@@ -128,8 +128,8 @@ function ShareOnX({
     if (typeof window === "undefined") return;
     const tokenUrl = `${window.location.origin}/token/${ca}`;
     const headline = symbol
-      ? `$${symbol.replace(/^\$/, "").toUpperCase()} on SolBeat — read the pulse:`
-      : `${name ?? "This Solana token"} on SolBeat — read the pulse:`;
+      ? `$${symbol.replace(/^\$/, "").toUpperCase()} on SolBeat, read the pulse:`
+      : `${name ?? "This Solana token"} on SolBeat, read the pulse:`;
     const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
       headline,
     )}&url=${encodeURIComponent(tokenUrl)}`;

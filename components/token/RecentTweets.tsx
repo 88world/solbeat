@@ -5,7 +5,7 @@ import { humanizeNumber } from "@/lib/utils";
 
 /**
  * Tweet feed styled like real X embeds. Each card shows:
- *   - gradient avatar (we don't have profile pics — first letter on a brand
+ *   - gradient avatar (we don't have profile pics, first letter on a brand
  *     gradient is the Twitter-card fallback look)
  *   - bold @handle + verified-style check if follower count >100k
  *   - relative time
@@ -112,7 +112,7 @@ function Avatar({ handle, avatarUrl }: { handle: string; avatarUrl: string | nul
 
   // Always render the gradient + initial as a base layer, then overlay the
   // <img> on top. If the img fails to load, hiding it reveals the fallback
-  // underneath. No onError handler needed — the browser just shows the alt
+  // underneath. No onError handler needed, the browser just shows the alt
   // styling, and our object-cover img stays hidden on broken src.
   return (
     <span
@@ -139,7 +139,7 @@ function Avatar({ handle, avatarUrl }: { handle: string; avatarUrl: string | nul
 }
 
 function VerifiedDot() {
-  // Small filled circle with a checkmark — matches Twitter's verified style
+  // Small filled circle with a checkmark, matches Twitter's verified style
   return (
     <span
       title="100k+ followers"

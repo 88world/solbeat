@@ -4,7 +4,7 @@ import path from "node:path";
 
 /**
  * Read ANTHROPIC_API_KEY robustly. Prefer process.env (standard path), but
- * fall back to direct .env.local parsing — Turbopack's env loader has been
+ * fall back to direct .env.local parsing, Turbopack's env loader has been
  * observed to silently produce an empty string for specific values that
  * contain mixed-case base64-style sequences. Direct parse bypasses the issue.
  */
@@ -17,7 +17,7 @@ function readApiKey(): string {
     const m = text.match(/^\s*ANTHROPIC_API_KEY\s*=\s*["']?([^\s"'#]+)/m);
     if (m && m[1]) return m[1];
   } catch {
-    /* file not readable — production env should already have it */
+    /* file not readable, production env should already have it */
   }
   return envVal;
 }

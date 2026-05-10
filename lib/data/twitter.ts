@@ -66,7 +66,7 @@ export async function fetchRecentTweets(
           author?.profile_image_url ??
           author?.avatar ??
           null;
-        // X serves _normal (48px) variants by default — request 200x200 for retina.
+        // X serves _normal (48px) variants by default, request 200x200 for retina.
         const avatar = rawAvatar
           ? rawAvatar.replace(/_normal\.(jpg|jpeg|png|gif)/i, "_200x200.$1")
           : null;

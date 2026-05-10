@@ -15,13 +15,13 @@ type Ripple = { id: number; x: number; y: number };
 
 type Props = {
   onPulse?: (kind: "valid" | "invalid") => void;
-  /** Optional 0..1 — when hot, the paste box glow tilts pink. */
+  /** Optional 0..1, when hot, the paste box glow tilts pink. */
   heat?: number;
 };
 
 const PLACEHOLDERS = [
   "Paste a Solana contract address…",
-  "Paste a CA — try $BONK, $WIF, $JUP",
+  "Paste a CA, try $BONK, $WIF, $JUP",
   "Drop any mint. Read its pulse.",
   "Paste an address. Decode the token.",
 ] as const;
@@ -63,7 +63,7 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Cycle the placeholder while empty + unfocused — slowed to reduce visual noise
+  // Cycle the placeholder while empty + unfocused, slowed to reduce visual noise
   useEffect(() => {
     if (focused || value.length > 0) return;
     const id = setInterval(() => {
@@ -135,7 +135,7 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
       autoComplete="off"
       role="search"
     >
-      {/* Ambient bloom that follows market heat — sits behind the box */}
+      {/* Ambient bloom that follows market heat, sits behind the box */}
       <div
         aria-hidden
         className="absolute -inset-6 rounded-[2.5rem] pointer-events-none transition-colors duration-1000"
@@ -216,7 +216,7 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
               className="w-full bg-transparent text-text-primary text-[14px] text-mono outline-none py-2.5 min-w-0"
               aria-label="Solana token address"
             />
-            {/* Cycling placeholder — fades between phrases */}
+            {/* Cycling placeholder, fades between phrases */}
             {value.length === 0 && !focused && (
               <div
                 key={phIdx}

@@ -13,7 +13,7 @@ export const contentType = "image/png";
  * automatically by social embeds (X, Telegram, Discord) when someone shares
  * the URL. The whole point: every share is free distribution.
  *
- * Data is intentionally slim — only DexScreener (price + symbol) and a single
+ * Data is intentionally slim, only DexScreener (price + symbol) and a single
  * Helius RPC for mint authority. We skip the AI + Perplexity + Twitter calls
  * that the full page makes; OG renders need to be cheap and fast (<1s) so
  * scrapers don't time out, and most of that data isn't useful in 1200×630
@@ -26,16 +26,16 @@ export default async function TokenOgImage({
 }) {
   const { ca } = await params;
   if (!isValidSolanaAddress(ca)) {
-    return fallbackCard("Invalid address", ca, "—", "—", "—", "warm");
+    return fallbackCard("Invalid address", ca, "-", "-", "-", "warm");
   }
 
-  // Both calls in parallel — they're independent.
+  // Both calls in parallel, they're independent.
   const [pair, mintInfo] = await Promise.all([
     fetchBestSolanaPair(ca).catch(() => null),
     getMintAccount(ca).catch(() => null),
   ]);
 
-  const symbol = pair?.baseToken?.symbol ?? "—";
+  const symbol = pair?.baseToken?.symbol ?? "-";
   const name = pair?.baseToken?.name ?? "Unknown token";
   const priceUsd = pair?.priceUsd ? Number(pair.priceUsd) : null;
   const change24h = pair?.priceChange?.h24 ?? null;
@@ -102,7 +102,7 @@ function Card({
         fontFamily: "system-ui, -apple-system, sans-serif",
       }}
     >
-      {/* Decorative orb in the corner — echoes the brand sphere */}
+      {/* Decorative orb in the corner, echoes the brand sphere */}
       <div
         style={{
           position: "absolute",
@@ -212,7 +212,7 @@ function Card({
             display: "flex",
           }}
         >
-          {priceUsd != null ? formatPrice(priceUsd) : "—"}
+          {priceUsd != null ? formatPrice(priceUsd) : "-"}
         </div>
         {change24h != null && (
           <div
@@ -320,37 +320,37 @@ function composeVerdict({
 }): { text: string; tone: Tone } {
   if (mintAuthority) {
     return {
-      text: "Mint authority still live — supply is not fixed.",
+      text: "Mint authority still live. Supply is not fixed.",
       tone: "bad",
     };
   }
   if (freezeAuthority) {
     return {
-      text: "Freeze authority active — balances can be frozen.",
+      text: "Freeze authority active. Balances can be frozen.",
       tone: "warn",
     };
   }
   if (liquidity > 0 && liquidity < 25_000) {
     return {
-      text: "Thin liquidity — small sells move the price meaningfully.",
+      text: "Thin liquidity. Small sells move the price meaningfully.",
       tone: "warn",
     };
   }
   if (change24h >= 50) {
     return {
-      text: `Pumping +${change24h.toFixed(0)}% — momentum is real, watch the holders.`,
+      text: `Pumping +${change24h.toFixed(0)}%. Momentum is real, watch the holders.`,
       tone: "good",
     };
   }
   if (change24h <= -30) {
     return {
-      text: `Bleeding ${change24h.toFixed(0)}% — sit on your hands.`,
+      text: `Bleeding ${change24h.toFixed(0)}%. Sit on your hands.`,
       tone: "bad",
     };
   }
   if (change24h >= 10) {
     return {
-      text: `Drifting up +${change24h.toFixed(0)}% — clean fundamentals so far.`,
+      text: `Drifting up +${change24h.toFixed(0)}%. Clean fundamentals so far.`,
       tone: "good",
     };
   }
@@ -364,6 +364,6 @@ function formatPrice(p: number): string {
   if (p >= 1) return `$${p.toLocaleString("en-US", { maximumFractionDigits: 4 })}`;
   if (p >= 0.01) return `$${p.toFixed(4)}`;
   if (p >= 0.0001) return `$${p.toFixed(6)}`;
-  // Tiny prices — show subscript-style
+  // Tiny prices, show subscript-style
   return `$${p.toExponential(2)}`;
 }

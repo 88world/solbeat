@@ -38,7 +38,9 @@ export async function fetchCatalysts(
         "  Line 1: a short bold title (no headers, no numbering)\n" +
         "  Line 2: one sentence summarizing the catalyst with a date reference\n" +
         "Separate items with a single blank line. No introduction. No conclusion. " +
-        "No price predictions. No bullet markers. No hashtag headers. Cite sources via [^N].",
+        "No price predictions. No bullet markers. No hashtag headers. " +
+        "No em dashes (—). Use periods or commas. Hard rule. " +
+        "Cite sources via [^N].",
     },
     {
       role: "user",
@@ -102,22 +104,23 @@ function parseCatalysts(
     if (lines.length === 0) continue;
 
     // First line: title. Strip leading bullets/dashes/numbers and **bold**.
-    const rawTitle = lines[0]
-      .replace(/^[-*\d.)\s]+/, "")
-      .replace(/\*\*(.+?)\*\*/g, "$1")
-      .replace(/\[\^?\d+\]/g, "")
-      .replace(/\s+—\s*/, " — ")
-      .trim();
+    const rawTitle = stripEmDashes(
+      lines[0]
+        .replace(/^[-*\d.)\s]+/, "")
+        .replace(/\*\*(.+?)\*\*/g, "$1")
+        .replace(/\[\^?\d+\]/g, ""),
+    );
 
     // Remaining lines = summary.
-    const summary = lines
-      .slice(1)
-      .join(" ")
-      .replace(/\*\*(.+?)\*\*/g, "$1")
-      .replace(/\[\^?(\d+)\]/g, "") // strip [^1], [1]
-      .replace(/^[-*]\s+/, "")
-      .replace(/\s+/g, " ")
-      .trim();
+    const summary = stripEmDashes(
+      lines
+        .slice(1)
+        .join(" ")
+        .replace(/\*\*(.+?)\*\*/g, "$1")
+        .replace(/\[\^?(\d+)\]/g, "") // strip [^1], [1]
+        .replace(/^[-*]\s+/, "")
+        .replace(/\s+/g, " "),
+    );
 
     // Single-line variant: treat the whole block as the summary, derive title
     // from the first ~6 words.
@@ -149,6 +152,21 @@ function parseCatalysts(
 
 function firstNWords(s: string, n: number): string {
   return s.split(/\s+/).slice(0, n).join(" ");
+}
+
+/**
+ * Strips em dashes from AI text. Hard rule, the system prompt forbids them
+ * but Perplexity slips them in anyway because it's a deeply trained habit.
+ *   " — "  → ". " (sentence break, the most common case)
+ *   "—"    → ", " (any remaining bare em dashes)
+ */
+function stripEmDashes(s: string): string {
+  return s
+    .replace(/\s+—\s+/g, ". ")
+    .replace(/—/g, ", ")
+    .replace(/,\s*\./g, ".") // collapse ", ." artifacts
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function cleanTitle(s: string): string {

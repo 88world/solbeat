@@ -10,12 +10,12 @@ import { humanizeNumber, pctChange } from "@/lib/utils";
 const ROTATE_INTERVAL_MS = 4500;
 
 /**
- * Vertical trending list — auto-rotates through the trending pool every 4.5s.
+ * Vertical trending list, auto-rotates through the trending pool every 4.5s.
  * Newest item slides in at the top with full opacity, older items fade as
  * they shift down (degen-feel: "what just popped"). Uses framer-motion's
  * AnimatePresence for clean enter/exit and an opacity ramp keyed by row index.
  *
- * Optional `heat` prop (0..1) — when the market gets hot, the live indicator
+ * Optional `heat` prop (0..1), when the market gets hot, the live indicator
  * dot shifts from BV pink to Solana green and the label updates.
  */
 export function TrendingList({
@@ -25,7 +25,7 @@ export function TrendingList({
 }: {
   limit?: number;
   heat?: number;
-  /** Optional — if provided, the list won't fetch on its own. Hero already does. */
+  /** Optional, if provided, the list won't fetch on its own. Hero already does. */
   tokens?: TrendingToken[];
 }) {
   const [tokensInternal, setTokensInternal] = useState<TrendingToken[]>([]);
@@ -34,7 +34,7 @@ export function TrendingList({
   const rootRef = useRef<HTMLDivElement>(null);
   const animatedRef = useRef(false);
 
-  // Self-fetch only when no tokens prop is passed — keeps the component
+  // Self-fetch only when no tokens prop is passed, keeps the component
   // standalone-capable while letting Hero deduplicate the network call.
   useEffect(() => {
     if (tokensProp) return;
@@ -57,7 +57,7 @@ export function TrendingList({
     };
   }, [tokensProp]);
 
-  // Auto-rotate the visible window — only when we have more than `limit` tokens
+  // Auto-rotate the visible window, only when we have more than `limit` tokens
   useEffect(() => {
     if (tokens.length <= limit) return;
     const id = setInterval(() => {
@@ -66,7 +66,7 @@ export function TrendingList({
     return () => clearInterval(id);
   }, [tokens.length, limit]);
 
-  // Initial entrance (anime.js stagger) — fires once per page load
+  // Initial entrance (anime.js stagger), fires once per page load
   useEffect(() => {
     if (animatedRef.current || tokens.length === 0) return;
     const root = rootRef.current;
@@ -117,7 +117,7 @@ export function TrendingList({
         ) : (
           <AnimatePresence initial={false} mode="popLayout">
             {visible.map((t, i) => {
-              // Opacity ramps down as items move down the stack — top item is
+              // Opacity ramps down as items move down the stack, top item is
               // the freshest/loudest, bottom item is fading out.
               const targetOpacity = 1 - i * 0.10;
               return (
@@ -174,7 +174,7 @@ function TrendingRow({
         }}
       />
 
-      {/* Direction stripe — colored bar at the left edge */}
+      {/* Direction stripe, colored bar at the left edge */}
       <span
         aria-hidden
         className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-7 rounded-r-full"
@@ -204,7 +204,7 @@ function TrendingRow({
             )}
           </div>
           <span className="text-[11px] font-medium text-text-muted truncate">
-            {token.name ?? "—"}
+            {token.name ?? "-"}
             {token.volume_24h != null && (
               <>
                 {" · "}vol ${humanizeNumber(token.volume_24h, 1)}

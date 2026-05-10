@@ -6,7 +6,7 @@ import { shortAddress } from "@/lib/utils";
 
 /**
  * Top holders list. Shows top 10 by default; "Show all 20" expands to the
- * full set. Three reviewers said the token page scrolled forever — this is
+ * full set. Three reviewers said the token page scrolled forever, this is
  * one of the longest panels, and 95% of users only care about the top 10
  * concentration. Keeping the data accessible (one click) without making it
  * the headline.
@@ -16,7 +16,7 @@ export function HolderList({
   ca,
 }: {
   holders: TokenHolders;
-  /** Optional — when provided, the empty state shows a Solscan deep link. */
+  /** Optional, when provided, the empty state shows a Solscan deep link. */
   ca?: string;
 }) {
   const [expanded, setExpanded] = useState(false);

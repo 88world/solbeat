@@ -16,12 +16,12 @@ const VISIBLE_SECONDS = 4; // constant scroll-speed window (real ECG monitors do
  * Canvas-animated ECG trace with smooth motion.
  *
  *   - Fixed-time window (4s visible). Scroll speed is constant regardless of
- *     BPM — the *waveform spikes* get closer together when the heart races,
+ *     BPM, the *waveform spikes* get closer together when the heart races,
  *     but the paper itself moves at the same rate. This is how real cardiac
  *     monitors render and feels natural.
  *   - Waveform built from Gaussian peaks (P, Q, R, S, T) instead of linear
  *     ramps. The R spike is still iconic and tall, but the curve has no
- *     angular corners — every transition is C¹ continuous.
+ *     angular corners, every transition is C¹ continuous.
  *   - Canvas line drawn with quadratic Bezier interpolation between samples,
  *     so the rendered stroke is C¹ smooth too.
  */
@@ -68,11 +68,11 @@ export function ECGTrace({
       ctx.lineTo(w, h / 2);
       ctx.stroke();
 
-      // Fixed scroll cadence — visible window is always 4s
+      // Fixed scroll cadence, visible window is always 4s
       const pxPerSec = w / VISIBLE_SECONDS;
       const period = 60 / Math.max(20, bpmRef.current);
 
-      const sampleCount = 360;
+      const sampleCount = 480; // bumped from 360 for finer curve resolution
       const points: Array<[number, number]> = new Array(sampleCount + 1);
       for (let i = 0; i <= sampleCount; i++) {
         const x = (i / sampleCount) * w;
@@ -82,7 +82,7 @@ export function ECGTrace({
         points[i] = [x, y];
       }
 
-      // Smooth Bezier draw — use midpoints as anchors with each sample as a
+      // Smooth Bezier draw, use midpoints as anchors with each sample as a
       // control point. C¹ continuous, no angular kinks.
       const drawSmooth = () => {
         ctx.beginPath();
@@ -110,7 +110,7 @@ export function ECGTrace({
       ctx.lineWidth = 1.4;
       drawSmooth();
 
-      // Glowing stylus dot at the right edge — tracks the live waveform
+      // Glowing stylus dot at the right edge, tracks the live waveform
       const lastY = points[points.length - 1][1];
       ctx.shadowColor = color;
       ctx.shadowBlur = 12;
@@ -136,24 +136,26 @@ export function ECGTrace({
 
 /**
  * PQRST complex built from 5 Gaussian peaks. Smoother than piecewise-linear
- * ramps — every transition is curved, no angular kinks. The R spike is still
+ * ramps, every transition is curved, no angular kinks. The R spike is still
  * tall and narrow (iconic ECG look) but the stroke is C¹ continuous.
  */
 function ecgWave(t: number): number {
-  // P wave — smooth atrial depolarization bump
-  const p = 0.18 * gaussian(t, 0.10, 0.040);
+  // P wave, smooth atrial depolarization bump (slightly wider for fluidity)
+  const p = 0.18 * gaussian(t, 0.10, 0.045);
 
-  // Q dip — narrow negative
-  const q = -0.30 * gaussian(t, 0.183, 0.013);
+  // Q dip, narrow negative (relaxed width so the dip isn't a hairline notch)
+  const q = -0.28 * gaussian(t, 0.183, 0.015);
 
-  // R spike — tall narrow positive (the iconic peak)
-  const r = 1.30 * gaussian(t, 0.210, 0.012);
+  // R spike, tall narrow positive. Softened from 1.30 to 1.15 and widened
+  // 0.012 → 0.014 so the iconic spike still reads but doesn't look like a
+  // razor blade, more "heartbeat", less "alarm bell".
+  const r = 1.15 * gaussian(t, 0.210, 0.014);
 
-  // S dip — short negative after R
-  const s = -0.25 * gaussian(t, 0.240, 0.015);
+  // S dip, short negative after R
+  const s = -0.22 * gaussian(t, 0.240, 0.018);
 
-  // T wave — broader repolarization bump
-  const tw = 0.32 * gaussian(t, 0.450, 0.075);
+  // T wave, broader repolarization bump
+  const tw = 0.32 * gaussian(t, 0.450, 0.080);
 
   return p + q + r + s + tw;
 }

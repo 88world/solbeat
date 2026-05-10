@@ -69,7 +69,7 @@ type ParsedAccountResp = {
 
 /**
  * Reads authoritative on-chain mint state via getAccountInfo with the
- * jsonParsed encoding. Works on the *public* Solana RPC — no API key needed —
+ * jsonParsed encoding. Works on the *public* Solana RPC, no API key needed —
  * and is the cheapest way to surface supply, decimals, mint authority, and
  * freeze authority for any SPL token.
  */
@@ -164,7 +164,7 @@ export async function getTokenHolders(
   const top10Sum = top20.slice(0, 10).reduce((s, h) => s + h.pct, 0);
 
   return {
-    total: null, // not directly available — would need getProgramAccounts
+    total: null, // not directly available, would need getProgramAccounts
     top_1_pct: top1Pct,
     top_10_pct: top10Sum || null,
     top_20: top20,

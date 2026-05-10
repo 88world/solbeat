@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SolBeat — The pulse of Solana",
+  title: "SolBeat, The pulse of Solana",
   description:
     "Paste any Solana contract. Get real-time on-chain data, X sentiment, and recent catalysts in one read. Built by Block Valley Labs for the Solana Frontier Hackathon.",
   applicationName: "SolBeat",
@@ -30,13 +30,13 @@ export const metadata: Metadata = {
     "Solana memecoins",
   ],
   openGraph: {
-    title: "SolBeat — The pulse of every Solana token",
+    title: "SolBeat, The pulse of every Solana token",
     description: "Paste any CA. Read the pulse.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "SolBeat — The pulse of every Solana token",
+    title: "SolBeat, The pulse of every Solana token",
     description: "Paste any CA. Read the pulse.",
   },
   icons: {

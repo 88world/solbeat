@@ -105,11 +105,11 @@ function composeFindings(
 ): Finding[] {
   const out: Finding[] = [];
 
-  // Authorities — name the actual finding (mint OR freeze) rather than a generic bucket
+  // Authorities, name the actual finding (mint OR freeze) rather than a generic bucket
   if (a.metadata.mint_authority) {
     out.push({
       label: "Mint authority active",
-      detail: "Supply is not fixed — issuer can mint new tokens.",
+      detail: "Supply is not fixed, issuer can mint new tokens.",
       score: 95,
     });
   } else if (a.metadata.freeze_authority) {
@@ -121,12 +121,12 @@ function composeFindings(
   } else {
     out.push({
       label: "Authorities revoked",
-      detail: "Mint and freeze are renounced — supply and accounts are fixed.",
+      detail: "Mint and freeze are renounced, supply and accounts are fixed.",
       score: 10,
     });
   }
 
-  // Liquidity — show the actual USD figure
+  // Liquidity, show the actual USD figure
   const liq = a.market.liquidity_usd ?? 0;
   out.push({
     label: liq < 5_000
@@ -137,14 +137,14 @@ function composeFindings(
           ? "Moderate liquidity"
           : "Deep liquidity",
     detail: liq > 0
-      ? `$${humanizeNumber(liq)} pooled — small sells move price ${
+      ? `$${humanizeNumber(liq)} pooled, small sells move price ${
           liq < 25_000 ? "a lot" : liq < 100_000 ? "noticeably" : "minimally"
         }.`
       : "No liquidity reported by indexer.",
     score: risk.factors.liquidity,
   });
 
-  // Holders — show the actual top-10 percentage
+  // Holders, show the actual top-10 percentage
   const top10 = a.holders.top_10_pct;
   const top1 = a.holders.top_1_pct;
   if (top10 != null) {
@@ -162,12 +162,12 @@ function composeFindings(
   } else {
     out.push({
       label: "Holders unavailable",
-      detail: "Couldn't read top-holder data — RPC didn't return.",
+      detail: "Couldn't read top-holder data, RPC didn't return.",
       score: risk.factors.holders,
     });
   }
 
-  // Pool age — show actual age
+  // Pool age, show actual age
   const ageH = a.metadata.age_hours ?? a.market.pair_age_hours;
   if (ageH != null) {
     const ageStr = ageH < 24
@@ -196,7 +196,7 @@ function composeFindings(
     });
   }
 
-  // Volume quality — wash trade signal
+  // Volume quality, wash trade signal
   const vol = a.market.volume_24h ?? 0;
   if (liq > 0 && vol > 0) {
     const vlr = vol / liq;

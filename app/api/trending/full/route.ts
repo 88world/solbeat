@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 /**
  * Wider trending fetch for the leaderboard. Cached identically to the smaller
- * /api/trending so we don't double-poll DexScreener — the underlying
+ * /api/trending so we don't double-poll DexScreener, the underlying
  * fetchTrendingFull pulls more results from the same multi-DEX search.
  */
 export async function GET() {

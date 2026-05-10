@@ -1,7 +1,7 @@
 import type { TokenAnalysis } from "@/types/token";
 
 /**
- * Proprietary signal panel — the "smart synthesis" combining every data
+ * Proprietary signal panel, the "smart synthesis" combining every data
  * source into a single one-line verdict + the underlying signals.
  *
  * Inputs we already have on every token, free:
@@ -13,7 +13,7 @@ import type { TokenAnalysis } from "@/types/token";
  *   - tweet engagement totals → social heat
  *
  * The panel composes these into named signal pills + a one-line verdict.
- * Zero AI tokens spent — pure rule-based logic on data we already fetch.
+ * Zero AI tokens spent, pure rule-based logic on data we already fetch.
  */
 export function SignalPanel({ analysis }: { analysis: TokenAnalysis }) {
   const signals = computeSignals(analysis);
@@ -58,7 +58,7 @@ type Signal = {
 function computeSignals(a: TokenAnalysis): Signal[] {
   const s: Signal[] = [];
 
-  // Buy/sell pressure (we don't have this on TokenAnalysis directly — would
+  // Buy/sell pressure (we don't have this on TokenAnalysis directly, would
   // need Wire txns through orchestrator; for now skip if absent).
   // Volume / liquidity ratio
   const liq = a.market.liquidity_usd ?? 0;
@@ -215,32 +215,35 @@ function composeVerdict(signals: Signal[]): { text: string; color: string } {
   // Pick the highest-weight bad/good signal as the headline phrase
   const top = [...signals].sort((a, b) => b.weight - a.weight)[0];
 
+  // Headline = capitalized highest-weight signal label.
+  const head = top.label.charAt(0).toUpperCase() + top.label.slice(1).toLowerCase();
+
   if (avg < -0.6) {
     return {
-      text: `${top.label.toLowerCase()} — sit on your hands.`,
+      text: `${head}. Sit on your hands.`,
       color: "#c1374a",
     };
   }
   if (avg < -0.2) {
     return {
-      text: `${top.label.toLowerCase()} flagged — verify before sizing.`,
+      text: `${head} flagged. Verify before sizing.`,
       color: "#d6601a",
     };
   }
   if (avg > 0.4) {
     return {
-      text: `${top.label.toLowerCase()} — momentum is real, watch the holders.`,
+      text: `${head}. Momentum is real, watch the holders.`,
       color: "#0a8f57",
     };
   }
   if (avg > 0) {
     return {
-      text: `${top.label.toLowerCase()} — mixed signals, lean cautious.`,
+      text: `${head}. Mixed signals, lean cautious.`,
       color: "#0a6f47",
     };
   }
   return {
-    text: "Mixed read — nothing screams either direction.",
+    text: "Mixed read. Nothing screams either direction.",
     color: "#4a4a5e",
   };
 }

@@ -24,22 +24,24 @@ export function Hero() {
   const heat = transientHeat ?? snapshot?.heat ?? 0.2;
   const bpm = heatToBpm(heat);
 
-  const [sphereSize, setSphereSize] = useState(260);
+  const [sphereSize, setSphereSize] = useState(180);
   const heroRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const compute = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
+      // Smaller across the board, the user said "make it smaller, I hate
+      // how it looks" after the previous size+amplitude bump made the orb
+      // feel oversized. The CSS halo behind it carries the visual weight
+      // now, the orb itself can be more demure.
       let target: number;
-      if (w < 480) target = 200;
-      else if (w < 768) target = 240;
-      else if (w < 1100) target = 260;
-      else if (w < 1440) target = 280;
-      else target = 300;
-      // Keep the sphere comfortably under half the viewport height. The
-      // bottom row is reserved for the live chart.
-      target = Math.min(target, Math.floor(h * 0.36));
+      if (w < 480) target = 140;
+      else if (w < 768) target = 170;
+      else if (w < 1100) target = 190;
+      else if (w < 1440) target = 210;
+      else target = 220;
+      target = Math.min(target, Math.floor(h * 0.28));
       setSphereSize(target);
     };
     compute();
@@ -47,7 +49,7 @@ export function Hero() {
     return () => window.removeEventListener("resize", compute);
   }, []);
 
-  // Single trending fetch — feeds MarketPulse, TrendingList, and LiveChart.
+  // Single trending fetch, feeds MarketPulse, TrendingList, and LiveChart.
   // Polled at 15s so the LiveChart fills with real samples quickly.
   const [tokens, setTokens] = useState<TrendingToken[]>([]);
   useEffect(() => {
@@ -110,7 +112,7 @@ export function Hero() {
       <div className="absolute inset-0 dot-grid pointer-events-none" aria-hidden />
 
       <div className="relative z-10 mx-auto max-w-[1320px] w-full h-full px-5 lg:px-8 py-4 lg:py-6 flex flex-col gap-4 lg:gap-5">
-        {/* TOP — centered headline + paste box */}
+        {/* TOP, centered headline + paste box */}
         <div
           className="flex flex-col items-center text-center gap-3 lg:gap-4"
           data-fade-up
@@ -140,7 +142,7 @@ export function Hero() {
           </div>
         </div>
 
-        {/* MIDDLE — three-column dashboard */}
+        {/* MIDDLE, three-column dashboard */}
         <div
           className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,4fr)] gap-4 lg:gap-5 lg:items-center"
         >
@@ -160,7 +162,7 @@ export function Hero() {
           </div>
         </div>
 
-        {/* BOTTOM — live chart spanning full width */}
+        {/* BOTTOM, live chart spanning full width */}
         <div data-fade-up className="hidden lg:block">
           <LiveChart tokens={tokens} limit={5} />
         </div>

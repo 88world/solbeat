@@ -4,20 +4,20 @@ import type { SolMacro } from "@/lib/data/dexscreener";
 /**
  * Heat is composed of three independent market signals:
  *
- *  - Volatility (50%) — how *big* the moves are. Top-3 average of |24h %|,
+ *  - Volatility (50%), how *big* the moves are. Top-3 average of |24h %|,
  *    normalized to an 18% reference. Captures intensity without being
  *    distorted by a single outlier.
  *
- *  - Breadth (30%) — how *many* tokens are moving meaningfully. Fraction of
+ *  - Breadth (30%), how *many* tokens are moving meaningfully. Fraction of
  *    the trending list with |24h %| > 3. A market where one token rips
  *    while everything else sleeps reads cooler than one where everything
  *    is moving.
  *
- *  - Volume (20%) — how much *money* is flowing. Log-scaled total 24h volume
+ *  - Volume (20%), how much *money* is flowing. Log-scaled total 24h volume
  *    normalized to a $50M reference, so $5M reads ~50% and $500M reads ~110%
  *    (clamped to 1).
  *
- * Sentiment (direction) is computed separately. Heat is a magnitude — a hot
+ * Sentiment (direction) is computed separately. Heat is a magnitude, a hot
  * market can be a rip OR a rug. The sphere uses heat for color temperature;
  * the MarketPulse panel surfaces sentiment + breadth + volume as their own
  * lines so the user understands *why* the market reads hot.
@@ -44,7 +44,7 @@ export type HeatSnapshot = {
 
 // Recalibrated so BPM actually moves with market state instead of pegging at
 // max. Median-based volatility kills outlier saturation (one token at +287%
-// can't drive heat alone — the market has to be broadly active). Volume
+// can't drive heat alone, the market has to be broadly active). Volume
 // reference raised from $50M → $250M because the trending list of 16 hot
 // Solana tokens routinely sums north of that. Breadth threshold raised so it
 // only counts meaningful moves.
@@ -93,7 +93,7 @@ export function computeHeatSnapshot(
 
   // ── Composite heat ──
   // Weighted toward volatility because that's what degens *feel*. Breadth
-  // catches "everything's moving." Volume is the smallest weight — it
+  // catches "everything's moving." Volume is the smallest weight, it
   // saturates fastest (log scale) so it's a tiebreaker, not a primary signal.
   const heat = clamp01(volatility * 0.55 + breadth * 0.30 + volume * 0.15);
 
@@ -151,7 +151,7 @@ const EMPTY_SNAPSHOT: HeatSnapshot = {
 
 /**
  * Real heartbeat range: 40..200 BPM. Maps to actual cardio zones a user knows
- * intuitively — resting / walking / jogging / running / sprinting.
+ * intuitively, resting / walking / jogging / running / sprinting.
  *   heat 0.1 → 56 BPM   (Calm,    resting)
  *   heat 0.3 → 88 BPM   (Steady,  walking briskly)
  *   heat 0.5 → 120 BPM  (Active,  jogging)
@@ -172,7 +172,7 @@ export function heatLabel(
   return "Calm";
 }
 
-/** Backwards-compat — heat-only when callers don't need the snapshot. */
+/** Backwards-compat, heat-only when callers don't need the snapshot. */
 export function computeHeat(tokens: TrendingToken[]): number {
   return computeHeatSnapshot(tokens).heat;
 }

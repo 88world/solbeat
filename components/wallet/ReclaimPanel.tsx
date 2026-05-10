@@ -64,7 +64,7 @@ export function ReclaimPanel() {
         const err = (await r.json().catch(() => ({}))) as { error?: string };
         if (err.error === "treasury_unconfigured") {
           setStatus(
-            "Reclaim is configured for production only — set NEXT_PUBLIC_BV_TREASURY_WALLET to enable.",
+            "Reclaim is configured for production only, set NEXT_PUBLIC_BV_TREASURY_WALLET to enable.",
           );
         } else {
           setStatus("Could not build reclaim transactions.");
@@ -97,7 +97,7 @@ export function ReclaimPanel() {
       );
     } catch (err) {
       console.error(err);
-      setStatus("Reclaim failed — try again.");
+      setStatus("Reclaim failed, try again.");
     }
   };
 
@@ -184,7 +184,7 @@ export function ReclaimPanel() {
                   />
                 ) : (
                   <span className="text-[9px] text-text-muted">
-                    {a.symbol?.slice(0, 3) ?? "—"}
+                    {a.symbol?.slice(0, 3) ?? "-"}
                   </span>
                 )}
               </div>

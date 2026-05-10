@@ -132,11 +132,11 @@ function pickTopConcern(f: RiskScore["factors"]): string {
   const entries = Object.entries(f) as [keyof RiskScore["factors"], number][];
   const [worst] = entries.sort((a, b) => b[1] - a[1]);
   switch (worst[0]) {
-    case "liquidity": return "Thin liquidity — even small sells can move the price meaningfully.";
-    case "holders": return "Concentrated holders — a single wallet exit could collapse the price.";
-    case "authorities": return "Active mint or freeze authority — supply and account state are not guaranteed fixed.";
-    case "age": return "Very young pool — too early to read sustainable demand.";
+    case "liquidity": return "Thin liquidity, even small sells can move the price meaningfully.";
+    case "holders": return "Concentrated holders, a single wallet exit could collapse the price.";
+    case "authorities": return "Active mint or freeze authority, supply and account state are not guaranteed fixed.";
+    case "age": return "Very young pool, too early to read sustainable demand.";
     case "volume_quality": return "Volume-to-liquidity ratio looks like wash trading rather than organic interest.";
-    default: return "Multiple moderate risk factors — read the full analysis.";
+    default: return "Multiple moderate risk factors, read the full analysis.";
   }
 }

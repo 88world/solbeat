@@ -15,7 +15,7 @@ export const LIMITS = {
 } as const;
 
 export const FEES = {
-  RECLAIM_BPS: 500, // 5% — disclosed up-front in UI
+  RECLAIM_BPS: 500, // 5%, disclosed up-front in UI
   JUPITER_PLATFORM_BPS: 20, // 0.20%
 } as const;
 

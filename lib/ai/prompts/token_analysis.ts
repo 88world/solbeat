@@ -8,18 +8,19 @@ import type {
 } from "@/types/token";
 import { runClaude } from "@/lib/ai/claude";
 
-export const TOKEN_ANALYSIS_SYSTEM = `You are SolBeat, an AI analyst that turns Solana token data into clear, honest, plain-English reads for crypto traders. You write the way a senior trader would explain a token to a friend over a beer — direct, useful, no jargon when plain words will do, no hedging when the data is clear. You never shill, you never moralize, you tell the user what's actually happening and what they should watch out for.
+export const TOKEN_ANALYSIS_SYSTEM = `You are SolBeat, an AI analyst that turns Solana token data into clear, honest, plain-English reads for crypto traders. You write the way a senior trader would explain a token to a friend over a beer, direct, useful, no jargon when plain words will do, no hedging when the data is clear. You never shill, you never moralize, you tell the user what's actually happening and what they should watch out for.
 
 You will receive a JSON payload with on-chain data, recent tweets, and recent news for a Solana token. Your job is to write exactly three short sections in the JSON output below.
 
-WHAT_THIS_IS — origin, supply, age, deployer, holder structure. 2-3 sentences. Lead with the most distinguishing fact.
+WHAT_THIS_IS, origin, supply, age, deployer, holder structure. 2-3 sentences. Lead with the most distinguishing fact.
 
-WHATS_HAPPENING — recent price action, volume changes, holder movement (accumulation/distribution), social sentiment direction, any catalyst from the news/tweets data. 3-4 sentences. Be specific about timeframes.
+WHATS_HAPPENING, recent price action, volume changes, holder movement (accumulation/distribution), social sentiment direction, any catalyst from the news/tweets data. 3-4 sentences. Be specific about timeframes.
 
-WHAT_TO_KNOW — the honest risks and signals. LP status, mint/freeze authority, holder concentration, age vs volume sustainability, any red flags. End with one direct line on what would change your read.
+WHAT_TO_KNOW, the honest risks and signals. LP status, mint/freeze authority, holder concentration, age vs volume sustainability, any red flags. End with one direct line on what would change your read.
 
 Rules:
 - No emojis. No exclamation marks. No "to the moon" language.
+- No em dashes (—). Never. Use periods or commas instead. This is a hard rule.
 - No price predictions or buy/sell recommendations.
 - If data is missing, say so explicitly. Don't invent.
 - If a token looks like a likely scam, say so plainly with the specific reasons.
@@ -110,13 +111,29 @@ function parseSynthesis(raw: string): TokenSynthesis | null {
       return null;
     }
     return {
-      what_this_is: obj.what_this_is,
-      whats_happening: obj.whats_happening,
-      what_to_know: obj.what_to_know,
+      what_this_is: stripEmDashes(obj.what_this_is),
+      whats_happening: stripEmDashes(obj.whats_happening),
+      what_to_know: stripEmDashes(obj.what_to_know),
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * Defensive em-dash stripper. The system prompt forbids em dashes but Claude
+ * (and Perplexity) still slip them in occasionally because they're a deeply
+ * trained typographic habit. We replace " — " with ". " (sentence break) and
+ * any leftover bare "—" with ", ". This runs on every AI-generated string
+ * the user will read.
+ */
+function stripEmDashes(s: string): string {
+  return s
+    .replace(/\s+—\s+/g, ". ")
+    .replace(/—/g, ", ")
+    .replace(/,\s*\./g, ".") // collapse ", ." artifacts from chained replacements
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function extractFirstJsonObject(raw: string): string | null {

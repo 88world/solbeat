@@ -184,7 +184,7 @@ function Row({ token, rank }: { token: TrendingToken; rank: number }) {
                 {symbol}
               </span>
               <span className="text-[10px] text-text-muted truncate font-medium">
-                {token.name ?? "—"}
+                {token.name ?? "-"}
               </span>
             </div>
             <span className="text-[9.5px] text-text-muted/70 font-mono">
@@ -195,7 +195,7 @@ function Row({ token, rank }: { token: TrendingToken; rank: number }) {
       </td>
 
       <td className="px-3 py-2.5 text-right text-text-primary tabular-nums">
-        {token.market_cap != null ? `$${humanizeNumber(token.market_cap)}` : "—"}
+        {token.market_cap != null ? `$${humanizeNumber(token.market_cap)}` : "-"}
       </td>
       <td className="px-3 py-2.5 text-right text-text-primary tabular-nums">
         {humanizePrice(token.price_usd)}
@@ -204,13 +204,13 @@ function Row({ token, rank }: { token: TrendingToken; rank: number }) {
         {formatAge(token.pair_age_hours)}
       </td>
       <td className="px-3 py-2.5 text-right text-text-secondary tabular-nums">
-        {totalTxns > 0 ? humanizeNumber(totalTxns, 0) : "—"}
+        {totalTxns > 0 ? humanizeNumber(totalTxns, 0) : "-"}
       </td>
       <td className="px-3 py-2.5 text-right text-text-primary tabular-nums">
-        {token.volume_24h != null ? `$${humanizeNumber(token.volume_24h)}` : "—"}
+        {token.volume_24h != null ? `$${humanizeNumber(token.volume_24h)}` : "-"}
       </td>
       <td className="px-3 py-2.5 text-right text-text-secondary tabular-nums">
-        {token.liquidity_usd != null ? `$${humanizeNumber(token.liquidity_usd)}` : "—"}
+        {token.liquidity_usd != null ? `$${humanizeNumber(token.liquidity_usd)}` : "-"}
       </td>
 
       <PctCell value={token.price_change_5m} />
@@ -245,7 +245,7 @@ function PctCell({
 }) {
   if (value == null) {
     return (
-      <td className="px-3 py-2.5 text-right text-text-muted">—</td>
+      <td className="px-3 py-2.5 text-right text-text-muted">-</td>
     );
   }
   const positive = value >= 0;
@@ -336,7 +336,7 @@ function sortValue(token: TrendingToken, key: SortKey): number | null {
 }
 
 function formatAge(hours: number | null): string {
-  if (hours == null) return "—";
+  if (hours == null) return "-";
   if (hours < 1) return `${Math.round(hours * 60)}m`;
   if (hours < 24) return `${Math.round(hours)}h`;
   if (hours < 24 * 30) return `${Math.round(hours / 24)}d`;
@@ -360,12 +360,12 @@ function computeRisk(t: TrendingToken): RiskLevel {
   else if (ageHours < 168) score += 15;
   else if (ageHours < 720) score += 5;
 
-  // Volume:liquidity ratio — wash trading signal
+  // Volume:liquidity ratio, wash trading signal
   const vlr = liq > 0 ? vol / liq : 0;
   if (vlr > 30) score += 25;
   else if (vlr > 15) score += 12;
 
-  // Extreme single-day move — could be pump-and-dump
+  // Extreme single-day move, could be pump-and-dump
   if (change24 > 200) score += 15;
   else if (change24 > 80) score += 5;
 

@@ -77,7 +77,7 @@ export function SwapPanel({ analysis }: { analysis: TokenAnalysis }) {
       setStatus(`Submitted: ${sig.slice(0, 8)}…`);
     } catch (err) {
       console.error(err);
-      setStatus("Swap failed — try again.");
+      setStatus("Swap failed, try again.");
     }
   };
 
@@ -129,7 +129,7 @@ export function SwapPanel({ analysis }: { analysis: TokenAnalysis }) {
       <div className="mt-3 text-[11px] text-text-muted">
         You receive
         <span className="float-right text-text-primary text-mono">
-          {loading ? "…" : out != null ? `${humanizeNumber(out, 4)} ${analysis.metadata.symbol ?? ""}` : "—"}
+          {loading ? "…" : out != null ? `${humanizeNumber(out, 4)} ${analysis.metadata.symbol ?? ""}` : "-"}
         </span>
       </div>
       {quote?.priceImpactPct && (

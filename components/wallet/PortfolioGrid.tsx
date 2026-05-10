@@ -59,7 +59,7 @@ export function PortfolioGrid({ held }: { held: HeldToken[] }) {
                 />
               ) : (
                 <span className="text-[10px] text-text-muted">
-                  {h.symbol?.slice(0, 3) ?? "—"}
+                  {h.symbol?.slice(0, 3) ?? "-"}
                 </span>
               )}
             </div>
@@ -69,7 +69,7 @@ export function PortfolioGrid({ held }: { held: HeldToken[] }) {
                   {h.symbol ?? "Unknown"}
                 </div>
                 <div className="text-mono text-[12px] text-text-secondary">
-                  {h.value_usd != null ? `$${humanizeNumber(h.value_usd)}` : "—"}
+                  {h.value_usd != null ? `$${humanizeNumber(h.value_usd)}` : "-"}
                 </div>
               </div>
               <div className="flex items-center justify-between gap-2 text-[11px] text-text-muted mt-0.5">

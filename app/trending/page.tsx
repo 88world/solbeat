@@ -43,7 +43,7 @@ export default async function TrendingPage() {
         <TrendingTable tokens={tokens} />
 
         <p className="mt-4 text-[10px] text-text-muted text-center">
-          Risk badge is heuristic — based on liquidity, pool age, volume-to-liquidity ratio, and 24h move size. Not financial advice.
+          Risk badge is heuristic, based on liquidity, pool age, volume-to-liquidity ratio, and 24h move size. Not financial advice.
         </p>
       </main>
     </div>

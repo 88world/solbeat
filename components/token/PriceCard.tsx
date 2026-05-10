@@ -24,12 +24,12 @@ export function PriceCard({ analysis }: { analysis: TokenAnalysis }) {
       </div>
 
       <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-4 text-[12px]">
-        <Stat label="Market cap" value={m.market_cap != null ? `$${humanizeNumber(m.market_cap)}` : "—"} />
-        <Stat label="24h volume" value={m.volume_24h != null ? `$${humanizeNumber(m.volume_24h)}` : "—"} />
-        <Stat label="Liquidity" value={m.liquidity_usd != null ? `$${humanizeNumber(m.liquidity_usd)}` : "—"} />
+        <Stat label="Market cap" value={m.market_cap != null ? `$${humanizeNumber(m.market_cap)}` : "-"} />
+        <Stat label="24h volume" value={m.volume_24h != null ? `$${humanizeNumber(m.volume_24h)}` : "-"} />
+        <Stat label="Liquidity" value={m.liquidity_usd != null ? `$${humanizeNumber(m.liquidity_usd)}` : "-"} />
         <Stat
           label="Pool age"
-          value={m.pair_age_hours != null ? formatAge(m.pair_age_hours) : "—"}
+          value={m.pair_age_hours != null ? formatAge(m.pair_age_hours) : "-"}
         />
       </div>
     </div>

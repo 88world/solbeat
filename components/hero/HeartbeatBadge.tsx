@@ -8,7 +8,7 @@ import { heatLabel } from "@/lib/utils/heat";
  *
  * The dot beats via a CSS keyframe whose duration is computed from the BPM,
  * so its visual rhythm matches the WebGL sphere's pulse cadence. Both have
- * been softened from the previous version — the pulse is now a gentle ambient
+ * been softened from the previous version, the pulse is now a gentle ambient
  * breath rather than a sharp medical-monitor twitch.
  */
 export function HeartbeatBadge({ bpm }: { bpm: number }) {
@@ -34,10 +34,10 @@ export function HeartbeatBadge({ bpm }: { bpm: number }) {
   const label = heatLabel(displayBpm);
   const heat = Math.max(0, Math.min(1, (displayBpm - 40) / 160)); // 0..1 from 40..200
   const labelColor =
-    heat >= 0.75 ? "#c1374a" :   // On fire — red
-    heat >= 0.5  ? "#d6601a" :   // Hot — amber-red
-    heat >= 0.3  ? "#a3680a" :   // Active — amber
-    "#0a8f57";                    // Calm / Steady — green
+    heat >= 0.75 ? "#c1374a" :   // On fire, red
+    heat >= 0.5  ? "#d6601a" :   // Hot, amber-red
+    heat >= 0.3  ? "#a3680a" :   // Active, amber
+    "#0a8f57";                    // Calm / Steady, green
 
   return (
     <div
