@@ -35,6 +35,8 @@ DEXScreener shows you 47 numbers. SolBeat tells you what they mean. The AI synth
 
 💰 **Wallet Pulse.** Connect a wallet, see per-position risk scores, a USD-weighted aggregate risk dial (SAFE / CAUTIOUS / LOADED / DANGER), and smart-money overlap chips that flag when you hold the same tokens as a curated KOL leaderboard.
 
+★ **Wallet Tracking.** Track up to two other wallets (free tier) with custom labels. Their on-chain moves surface in the Live Wire ticker within ten minutes via server-side Helius polling — no extension, no signature replay, no client-side RPC drain.
+
 🔥 **Hidden SOL Reclaim.** Surface SOL locked in empty token accounts and reclaim it in a single transaction.
 
 🔄 **Built-in Swap.** Jupiter v6 routing baked in, no app-switching to trade what you just analyzed.

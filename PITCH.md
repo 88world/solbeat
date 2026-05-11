@@ -39,7 +39,7 @@ Paste a Solana contract address into SolBeat. In under five seconds you get:
 - **Holder map** with smart-money labels for 17 curated KOL wallets (theo, Nyhrox, Cented, Jijo, and 13 others).
 - **A pump.fun bonding-curve gauge** if the token is pre-graduation.
 
-For wallets, paste any base58 address and see badges, a USD-weighted aggregate risk dial, smart-money overlap chips ("you hold what theo holds"), holdings donut, and a 90-day activity heatmap.
+For wallets, paste any base58 address and see badges, a USD-weighted aggregate risk dial, smart-money overlap chips ("you hold what theo holds"), holdings donut, and a 90-day activity heatmap. Connect your own wallet to track up to two others — their next on-chain move surfaces in Live Wire within ten minutes.
 
 ---
 
@@ -80,16 +80,16 @@ Integration code is MIT (everything in the repo). The reasoning layer (proprieta
 |---|---|
 | `/` | Hero with live BPM ECG, trending list, live activity feed, ecosystem strip, tokens-to-watch grid |
 | `/token/[ca]` | Full token analysis: AI synthesis, candlestick chart, buy/sell pressure, risk score, holder list, bubble map, signal panel, catalysts, tweets, pulse timeline, swap panel |
-| `/wallet` | Connected-wallet view: aggregate risk dial, top flagged positions, smart-money overlap, hidden SOL reclaim |
+| `/wallet` | Connected-wallet view: aggregate risk dial, top flagged positions, smart-money overlap, hidden SOL reclaim, tracked-wallets management |
 | `/wallet/[address]` | Public wallet profile: badges + whale score, portfolio donut, 90-day activity heatmap, holdings, recent signatures |
 | `/trending` | Full trending leaderboard |
 | `/search` | Symbol search |
 
-### Six event kinds in the Live Wire banner
+### Seven event kinds in the Live Wire banner
 
-🎓 Graduation · 🚀 Rip · 🩸 Dump · 🏁 Mcap milestone · 🎯 Sniper · 🧠 Smart-money move
+🎓 Graduation · 🚀 Rip · 🩸 Dump · 🏁 Mcap milestone · 🎯 Sniper · 🧠 Smart-money move · ★ Tracked-wallet move
 
-Each links to a relevant target (token page or wallet profile).
+Each links to a relevant target (token page or wallet profile). The `★ Tracked` kind is user-driven: connect a wallet, track up to two others (free tier) with custom labels, and any signature they sign in the last 10 minutes surfaces here in real time.
 
 ### Five Suspense-streamed cells per token page
 
@@ -205,7 +205,7 @@ Five model + caching changes drove this:
 
 ### Engineering rigor
 
-- **82 commits** across the development arc
+- **90+ commits** across the development arc
 - **Zero TypeScript errors**, zero ESLint errors at production build
 - **IntersectionObserver-gated canvas rAF** on every animation surface (LiveChart, HeartWave, ECGTrace, LiveFlow) so off-screen visuals stop rendering
 - **`document.hidden` gate** on all seven polling intervals (Hero, LiveActivityFeed, EcosystemStrip, TokensToWatch, PriceCard, BondingCurveCard, BuySellPressure) so background tabs stop fetching
