@@ -18,6 +18,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  // Anchors all `openGraph.images` + `twitter.images` to the production
+  // origin so social cards resolve to absolute https URLs instead of
+  // the localhost:3000 fallback Next defaults to. Without this, shares
+  // posted from production rendered broken image references.
+  metadataBase: new URL("https://solbeat.blockvalley.io"),
   title: "SolBeat, The pulse of Solana",
   description:
     "Paste any Solana contract. Get real-time on-chain data, X sentiment, and recent catalysts in one read. Built by Block Valley Labs for the Solana Frontier Hackathon.",
