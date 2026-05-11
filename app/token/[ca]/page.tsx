@@ -89,13 +89,19 @@ export default async function TokenPage({ params }: PageProps) {
     fast.market.liquidity_usd == null;
 
   if (noData) {
-    // The CA didn't resolve as a token. Before showing the 404, check if
-    // it's actually a *wallet* — if so, redirect the user to the wallet
-    // profile page automatically. This is the single highest-frequency
-    // "wrong route" path: people paste their own wallet expecting to see
-    // a token page.
+    // The CA didn't resolve as a token. Before showing the 404, classify
+    // the address on-chain and send the user wherever the data actually
+    // lives. Anything that isn't a token mint or executable program is
+    // routed to /wallet/[address] — the wallet page handles "unknown"
+    // (never-funded addresses), "token-account" (someone pasted an ATA),
+    // and regular wallets gracefully. Only true mints + programs +
+    // outright RPC failures fall through to the 404 UI.
     const kindInfo = await getAccountKind(ca);
-    if (kindInfo.kind === "wallet") {
+    const looksLikeWallet =
+      kindInfo.kind === "wallet" ||
+      kindInfo.kind === "unknown" ||
+      kindInfo.kind === "token-account";
+    if (looksLikeWallet) {
       redirect(`/wallet/${ca}`);
     }
 

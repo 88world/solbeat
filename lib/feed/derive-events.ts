@@ -53,7 +53,9 @@ export type FeedEvent =
       symbol: string;
       mcap: number | null;
       ageHours: number | null;
-      txns1h: number;
+      /** 1h volume in USD — the activity proxy we use because the
+       *  trending payload doesn't carry per-1h tx counts. */
+      volume1h: number;
       ts: number;
     }
   | {
@@ -199,7 +201,7 @@ export function deriveEvents(
           symbol: cleanSymbol(t.symbol),
           mcap,
           ageHours: t.pair_age_hours,
-          txns1h: Math.round(t.volume_1h),
+          volume1h: t.volume_1h,
           ts: nowMs,
         });
         ripCooldownNext.set(t.ca, nowMs);
@@ -246,7 +248,7 @@ export function formatEvent(ev: FeedEvent): string {
     case "milestone":
       return `$${ev.symbol} crossed $${humanMcap(ev.milestone)} mcap`;
     case "sniper":
-      return `$${ev.symbol} firing · ${ev.txns1h} txns in 1h · ${ev.ageHours?.toFixed(0)}h old`;
+      return `$${ev.symbol} firing · $${humanMcap(ev.volume1h)} vol in 1h · ${ev.ageHours?.toFixed(0)}h old`;
     case "smart-buy":
       return `Smart money (${ev.kol}) just moved${ev.ca ? "" : ""}`;
   }

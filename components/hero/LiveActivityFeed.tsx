@@ -184,7 +184,7 @@ export function LiveActivityFeed({
 
   return (
     <div
-      className="relative w-full rounded-full overflow-hidden"
+      className="relative w-full rounded-full overflow-hidden flex items-center gap-3 px-3 sm:px-4 py-2.5 min-h-[44px]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       style={{
@@ -195,9 +195,12 @@ export function LiveActivityFeed({
           "0 1px 0 rgba(255,255,255,0.08) inset, 0 6px 18px rgba(10, 10, 30, 0.05)",
       }}
     >
-      {/* LIVE pip on the left. On phones the wordmark collapses so the
-          pip alone marks the banner, leaving room for the event text. */}
-      <div className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-center gap-2 pointer-events-none">
+      {/* Left: pip + label. Real flex item now (not absolutely positioned)
+          so the event content can never overlap it. Wordmark hides on
+          phones — the pip alone carries the meaning. The "paused" suffix
+          is a separate inline-flex item so it has its own width budget
+          and doesn't blow out the label. */}
+      <div className="flex items-center gap-2 shrink-0">
         <span className="relative flex">
           <span
             className="absolute inset-0 size-2 rounded-full animate-ping"
@@ -208,22 +211,26 @@ export function LiveActivityFeed({
             style={{ background: "#FF2D9C" }}
           />
         </span>
-        <span className="hidden sm:inline text-[9.5px] uppercase tracking-[0.22em] font-bold text-text-secondary">
-          Live wire {paused && <span className="opacity-60">· paused</span>}
+        <span className="hidden sm:inline text-[9.5px] uppercase tracking-[0.22em] font-bold text-text-secondary whitespace-nowrap">
+          Live wire
         </span>
+        {paused && (
+          <span className="hidden sm:inline text-[9.5px] uppercase tracking-[0.22em] font-bold text-text-muted whitespace-nowrap">
+            · paused
+          </span>
+        )}
+        {/* Vertical divider between header and event content. Subtle,
+            keeps the two regions visually distinct without a hard line. */}
+        <span
+          aria-hidden
+          className="hidden sm:inline-block h-4 w-px ml-1"
+          style={{ background: "var(--border-subtle)" }}
+        />
       </div>
 
-      {/* Counter on the right */}
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20 hidden sm:flex items-center gap-2 pointer-events-none">
-        <span className="text-[9.5px] uppercase tracking-[0.18em] font-bold text-text-muted tabular-nums">
-          {queue.length > 0 ? `${idx + 1} / ${queue.length}` : "—"}
-        </span>
-      </div>
-
-      {/* Event content — rotates. Mobile gets a much tighter left pad
-          (just the pip width) since we dropped the "Live wire" label
-          on small screens. */}
-      <div className="pl-8 sm:pl-[110px] pr-4 sm:pr-[88px] py-3 min-h-[44px] flex items-center">
+      {/* Center: event content, fills remaining width, content can
+          truncate inside FeedRow if the line gets long. */}
+      <div className="flex-1 min-w-0">
         <AnimatePresence mode="wait">
           {showPlaceholder ? (
             <motion.div
@@ -240,6 +247,12 @@ export function LiveActivityFeed({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Right: counter, desktop-only. Stays out of the flex flow on
+          phones so the event line has full breathing room. */}
+      <span className="hidden sm:inline text-[9.5px] uppercase tracking-[0.18em] font-bold text-text-muted tabular-nums shrink-0">
+        {queue.length > 0 ? `${idx + 1} / ${queue.length}` : "—"}
+      </span>
     </div>
   );
 }
