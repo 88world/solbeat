@@ -89,16 +89,16 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
   }, [lastTick]);
 
   // ── Easter egg: Trump-tier event ──────────────────────────────────────
-  // When BPM crosses 190 (the ceiling the heat math now reserves for
-  // "the entire ecosystem is screaming") we fire a one-time page-wide
-  // pulse + a glowing badge near the BPM. The threshold is rare by
-  // design — heat=0.96+ requires SOL macro + breadth + volume + at least
-  // one parabolic launch all firing at once. When it triggers, the user
-  // remembers it. (Compare: "I was online when Trump released the coin.")
+  // Lowered for Frontier demo recording — revert to 190/175 post-submission.
+  // When BPM crosses the threshold we fire a one-time page-wide pulse +
+  // a glowing badge near the BPM. Originally 190/175 (heat=0.96+, "the
+  // entire ecosystem is screaming"); temporarily 170/155 so judges
+  // viewing the demo actually catch the easter egg on a typical day's
+  // market heat. The 15-BPM hysteresis gap is preserved.
   const [trumpTier, setTrumpTier] = useState(false);
   const wasTrumpRef = useRef(false);
   useEffect(() => {
-    const isTrump = displayBpm >= 190;
+    const isTrump = displayBpm >= 170;
     if (isTrump && !wasTrumpRef.current) {
       wasTrumpRef.current = true;
       setTrumpTier(true);
@@ -108,9 +108,9 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
       const root = document.documentElement;
       root.classList.add("solbeat-trump-flash");
       setTimeout(() => root.classList.remove("solbeat-trump-flash"), 2200);
-    } else if (!isTrump && wasTrumpRef.current && displayBpm < 175) {
-      // Hysteresis: only un-arm once we've come back down below 175,
-      // so a 189 ↔ 190 oscillation doesn't strobe.
+    } else if (!isTrump && wasTrumpRef.current && displayBpm < 155) {
+      // Hysteresis: only un-arm once we've come back down below 155,
+      // so a 169 ↔ 170 oscillation doesn't strobe.
       wasTrumpRef.current = false;
       setTrumpTier(false);
     }

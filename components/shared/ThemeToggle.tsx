@@ -7,18 +7,18 @@ const STORAGE_KEY = "solbeat:theme";
 
 /**
  * Theme toggle. Reads/writes data-theme on the document root and persists
- * to localStorage. Light is the default (the brand identity); dark is for
- * the degens watching the page at 2am between trades. The setup script in
- * layout.tsx applies the saved theme before React hydrates so there's no
- * flash on page load.
+ * to localStorage. Dark is the default — degens use dark. Light is opt-in
+ * via this toggle, and the choice persists across sessions in
+ * localStorage. The setup script in layout.tsx applies the saved theme
+ * before React hydrates so there's no flash on page load.
  */
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<Theme>("dark");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const stored = (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? "light";
+    const stored = (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? "dark";
     setTheme(stored);
     document.documentElement.dataset.theme = stored;
   }, []);
@@ -105,16 +105,18 @@ export function ThemeToggle() {
 /**
  * Inline script source for layout.tsx. Sets data-theme on <html> before
  * React hydrates so there's no flash. Reads localStorage; falls back to
- * light. We deliberately do NOT honor prefers-color-scheme by default,
- * the brand chose light, dark is opt-in.
+ * dark (the degen-audience default). We deliberately do NOT honor
+ * prefers-color-scheme automatically — the toggle is explicit, and a
+ * user who's opted into light keeps light across sessions regardless
+ * of their OS setting.
  */
 export const THEME_INIT_SCRIPT = `
 (function () {
   try {
-    var t = localStorage.getItem('${STORAGE_KEY}') || 'light';
+    var t = localStorage.getItem('${STORAGE_KEY}') || 'dark';
     document.documentElement.dataset.theme = t;
   } catch (e) {
-    document.documentElement.dataset.theme = 'light';
+    document.documentElement.dataset.theme = 'dark';
   }
 })();
 `;

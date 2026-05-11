@@ -31,6 +31,21 @@ export function ReclaimPanel() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
+  // Detect live-fee mode at mount. The treasury wallet is a NEXT_PUBLIC_*
+  // env so it's available client-side; if it's set the build endpoint
+  // will route the 5% fee to it. We log once for the demo-recording
+  // sanity check ("yes, the fee is going somewhere real").
+  useEffect(() => {
+    const treasury = process.env.NEXT_PUBLIC_BV_TREASURY_WALLET;
+    if (treasury && treasury.length > 0) {
+      console.log(
+        `[reclaim] live-fee mode — ${FEES.RECLAIM_BPS / 100}% routes to ${treasury.slice(0, 6)}…${treasury.slice(-6)}`,
+      );
+    } else {
+      console.log("[reclaim] demo mode — no fee charged (treasury wallet not set)");
+    }
+  }, []);
+
   useEffect(() => {
     if (!publicKey) return;
     let cancelled = false;

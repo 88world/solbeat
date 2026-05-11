@@ -69,7 +69,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      data-theme="light"
+      // Default theme is dark — degens use dark. ThemeToggle persists the
+      // user's choice in localStorage; THEME_INIT_SCRIPT in <head> below
+      // re-applies that choice before first paint so a user who picked
+      // light still gets light without a flash of dark.
+      data-theme="dark"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
