@@ -82,6 +82,7 @@ export function LiveActivityFeed({
   // refresh.
   type SmartEntry = {
     kol: string;
+    address: string;
     last_sig: string;
     last_seen: number;
     age_seconds: number;
@@ -104,6 +105,7 @@ export function LiveActivityFeed({
           newEvents.push({
             kind: "smart-buy",
             kol: e.kol,
+            kol_address: e.address,
             ts: e.last_seen * 1000,
           });
         }
@@ -265,13 +267,17 @@ function FeedRow({ ev }: { ev: FeedEvent }) {
   const accent = eventAccent(ev);
   const text = formatEvent(ev);
 
-  // Build a clickable target where appropriate.
-  const href =
-    ev.kind === "smart-buy"
-      ? // Smart-money event currently doesn't carry a CA (we only see the
-        // signature). Punt to a future enhancement; for now, no link.
-        null
-      : `/token/${(ev as { ca?: string }).ca ?? ""}`;
+  // Resolve the click target per event kind:
+  //   smart-buy → /wallet/{kol_address} (the KOL's public wallet profile)
+  //   anything else with a `ca` → /token/{ca}
+  //   nothing else qualifies for a link
+  let href: string | null = null;
+  if (ev.kind === "smart-buy" && ev.kol_address) {
+    href = `/wallet/${ev.kol_address}`;
+  } else if (ev.kind !== "smart-buy") {
+    const ca = (ev as { ca?: string }).ca;
+    if (ca) href = `/token/${ca}`;
+  }
 
   const Inner = (
     <motion.div
@@ -295,14 +301,31 @@ function FeedRow({ ev }: { ev: FeedEvent }) {
       <span className="text-[13px] text-text-primary font-semibold tracking-tight truncate">
         {text}
       </span>
+      {/* Trailing arrow hints "tap to go". Only on linkable events. */}
+      {href && (
+        <span
+          aria-hidden
+          className="ml-auto pl-2 text-[12px] text-text-muted shrink-0 hidden sm:inline-flex"
+          style={{ color: accent.color, opacity: 0.7 }}
+        >
+          →
+        </span>
+      )}
     </motion.div>
   );
 
+  // Link wraps the motion.div with `pointer-events-none` on the inner —
+  // that way all clicks register on the <a> regardless of which framer-
+  // motion transition state the inner element is in (otherwise mid-exit
+  // animation can swallow pointer events). `prefetch={false}` prevents
+  // every rotation tick from prefetching the next event's target, which
+  // was firing /api/trending for every CA every 3.5s.
   if (href) {
     return (
       <Link
         href={href}
-        className="block w-full hover:opacity-90 transition-opacity"
+        prefetch={false}
+        className="group block w-full cursor-pointer hover:opacity-95 transition-opacity"
       >
         {Inner}
       </Link>

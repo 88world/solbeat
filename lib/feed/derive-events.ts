@@ -61,7 +61,14 @@ export type FeedEvent =
   | {
       kind: "smart-buy"; // a known KOL wallet made a swap (separate fetcher)
       kol: string;
-      ca?: string; // unknown when we only see a signature
+      /** The KOL wallet's base58 address. Threaded through from the
+       *  /api/smart-feed endpoint so the click target can resolve to
+       *  /wallet/{address} (the public wallet profile page). */
+      kol_address: string;
+      /** Optional: the token CA we eventually decode. Currently unknown
+       *  because we only watch signatures, not parse transaction
+       *  contents — wired for the future enhancement. */
+      ca?: string;
       ts: number;
     };
 
