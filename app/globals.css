@@ -287,3 +287,21 @@ html.solbeat-trump-flash {
     transform: translateX(-50%) scale(1.06);
   }
 }
+
+/* Reclaim-CTA breathing halo. Replaces the previous distracting linear
+   gradient wipe on the button — the button itself is now static, the
+   aliveness comes from this halo softly inhaling/exhaling. Opacity +
+   scale only, no color travel, so the eye reads "alive" without "busy". */
+@keyframes reclaim-glow-breathe {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.06);
+  }
+}
+.reclaim-cta:hover > span[aria-hidden]:first-of-type {
+  animation-duration: 1.6s;
+}

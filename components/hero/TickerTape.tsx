@@ -35,7 +35,17 @@ export function TickerTape({
   // at heat=1 it's at 28s/loop, fast enough to feel hectic without
   // becoming unreadable. Explicit `speedMs` override wins so callers can
   // still pin a speed if they want.
+  //
+  // CRITICAL: `resolvedSpeed` MUST NOT be in the useEffect deps. Heat
+  // updates every poll (~8s), shifting resolvedSpeed by a few ms each
+  // time. If we re-ran the effect, anime would tear down + recreate the
+  // animation, snapping translateX back to 0 — to the user that looked
+  // like the ticker was frozen. We capture the initial value here and
+  // expose a ref for future loop iterations to read updated values from
+  // (anime v4 evaluates function values on each iteration).
   const resolvedSpeed = speedMs ?? Math.round(60_000 - Math.min(1, heat) * 32_000);
+  const speedRef = useRef(resolvedSpeed);
+  speedRef.current = resolvedSpeed;
   const trackRef = useRef<HTMLDivElement>(null);
   const setRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<{ pause: () => void; play: () => void } | null>(null);
@@ -61,9 +71,12 @@ export function TickerTape({
     const a = animate(track, {
       // anime.js accepts pixel translations directly. Going from 0 to
       // -setWidth means the second set lands EXACTLY where the first
-      // started, then we loop and continue.
+      // started, then we loop and continue. Function value gets
+      // re-evaluated on each loop iteration, so resize stays accurate.
       translateX: () => [`0px`, `${-setWidth}px`],
-      duration: resolvedSpeed,
+      // Duration also a function so future heat changes are picked up
+      // on the next loop iteration without rebuilding the animation.
+      duration: () => speedRef.current,
       ease: "linear",
       loop: true,
     });
@@ -76,7 +89,9 @@ export function TickerTape({
       a.pause();
       ro.disconnect();
     };
-  }, [tokens.length, resolvedSpeed]);
+    // Only re-run when the token list itself changes (length differs).
+    // Speed lives in a ref so heat ticks don't tear down the animation.
+  }, [tokens.length]);
 
   if (tokens.length === 0) return null;
 

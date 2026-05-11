@@ -8,6 +8,7 @@ import {
   SolflareWalletAdapter,
 } from "@solana/wallet-adapter-wallets";
 import "@solana/wallet-adapter-react-ui/styles.css";
+import { WalletErrorBoundary } from "@/components/shared/WalletErrorBoundary";
 
 export function Providers({ children }: { children: ReactNode }) {
   const endpoint = useMemo(() => {
@@ -22,11 +23,17 @@ export function Providers({ children }: { children: ReactNode }) {
     [],
   );
 
+  // WalletErrorBoundary catches crashes from deep wallet-adapter
+  // transitive deps (e.g. Trezor's MediaQueryList.addListener call)
+  // that would otherwise blow up the entire page render. The rest of
+  // the app still works — only the wallet UI degrades.
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <WalletErrorBoundary>
+      <ConnectionProvider endpoint={endpoint}>
+        <WalletProvider wallets={wallets} autoConnect>
+          <WalletModalProvider>{children}</WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    </WalletErrorBoundary>
   );
 }

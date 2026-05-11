@@ -197,7 +197,7 @@ function CompactStat({
       >
         {count.toLocaleString("en-US")}
       </span>
-      <span className="text-[10px] text-text-muted text-mono ml-auto">
+      <span className="text-[10px] text-text-secondary text-mono ml-auto">
         ≈ ${humanizeNumber(dollars)}
       </span>
     </div>
@@ -323,12 +323,16 @@ function BuyPctTrend({
   const delta = last - first;
   const direction = delta > 1 ? "climbing" : delta < -1 ? "falling" : "flat";
   const arrow = direction === "climbing" ? "↑" : direction === "falling" ? "↓" : "→";
+  // Neutral "flat" color is theme-aware so it reads on dark bg.
+  // The two signed states stay locked to the brand green/crimson because
+  // those still pop on both themes (dark forest vs bright dark-mode bg
+  // is still 4.5:1+).
   const dirColor =
     direction === "climbing"
       ? "#0a8f57"
       : direction === "falling"
         ? "#c1374a"
-        : "#5a5a70";
+        : "var(--text-secondary)";
 
   return (
     <div className="mb-2">
@@ -418,7 +422,7 @@ function PressureBar({
       <div
         className="relative h-9 rounded-lg overflow-hidden flex"
         style={{
-          boxShadow: "inset 0 0 0 1px rgba(10, 10, 30, 0.06)",
+          boxShadow: "inset 0 0 0 1px var(--border-subtle)",
         }}
       >
         <div
@@ -427,7 +431,11 @@ function PressureBar({
             width: `${renderedBuy}%`,
             background:
               "linear-gradient(90deg, rgba(20, 241, 149, 0.15), rgba(20, 241, 149, 0.45))",
-            color: "#0a4f2c",
+            // Was #0a4f2c (dark forest green) — invisible on dark theme
+            // because the bar shows as a darker green tint on dark bg.
+            // var(--text-primary) is dark in light theme (reads on bright
+            // green) and light in dark theme (reads on the darker tint).
+            color: "var(--text-primary)",
             transition: "background 400ms ease",
           }}
         >
@@ -439,20 +447,24 @@ function PressureBar({
             width: `${100 - renderedBuy}%`,
             background:
               "linear-gradient(90deg, rgba(255, 45, 156, 0.45), rgba(255, 45, 156, 0.15))",
-            color: "#5a1322",
+            // Same fix as the buy side — was #5a1322 (dark crimson).
+            color: "var(--text-primary)",
             transition: "background 400ms ease",
           }}
         >
           {100 - renderedBuy >= 14 && `${sellPct.toFixed(0)}%`}
         </div>
       </div>
+      {/* Dollar labels under the bar — bumped from text-muted (too dim
+          on dark theme, #606070 on near-black) to text-secondary
+          (#a0a0b0 in dark, #4a4a5e in light, both pass contrast). */}
       <div className="flex items-baseline justify-between text-[10.5px] mt-1.5">
-        <span className="text-mono text-text-muted">
+        <span className="text-mono text-text-secondary">
           ${humanizeNumber(buyDollars)}{" "}
-          <span className="text-[9px] uppercase tracking-[0.14em]">buy</span>
+          <span className="text-[9px] uppercase tracking-[0.14em] text-text-muted">buy</span>
         </span>
-        <span className="text-mono text-text-muted">
-          <span className="text-[9px] uppercase tracking-[0.14em]">sell</span>{" "}
+        <span className="text-mono text-text-secondary">
+          <span className="text-[9px] uppercase tracking-[0.14em] text-text-muted">sell</span>{" "}
           ${humanizeNumber(sellDollars)}
         </span>
       </div>
@@ -545,7 +557,7 @@ function composeVerdict(
   if (thinSample) {
     return {
       text: `Quiet window. ${totalTxns} txn${totalTxns === 1 ? "" : "s"} this period — too thin to read.`,
-      color: "#5a5a70",
+      color: "var(--text-secondary)",
     };
   }
   if (net > 30) {

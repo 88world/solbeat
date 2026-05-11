@@ -21,6 +21,33 @@ import {
 import { computeSignals, composeVerdict } from "@/lib/pulse/signal";
 import { appendPulseSnapshot, composeSnapshot } from "@/lib/pulse/snapshots";
 
+/**
+ * Picks the best image URL between Helius DAS metadata and DexScreener.
+ *
+ * Helius DAS returns whatever the on-chain metadata pointer says, which
+ * is usually `ipfs.io/ipfs/<cid>` — semantically correct but slow and
+ * frequently rate-limited or unreachable from a typical browser. The
+ * DexScreener CDN serves the same image (Dex pulls metadata from the
+ * same source) optimized + format-converted at the edge, so it's
+ * consistently fast.
+ *
+ * Priority:
+ *   1. DexScreener CDN image (cdn.dexscreener.com/cms/images/...)
+ *   2. Helius DAS image (could be IPFS, HTTPS, or data URL)
+ *   3. Any other DexScreener URL (rare, but covers self-hosted edge cases)
+ *   4. null
+ */
+function pickBestTokenImage(
+  asset: { image?: string | null } | null | undefined,
+  dexInfo: { imageUrl?: string | null } | null | undefined,
+): string | null {
+  const dex = dexInfo?.imageUrl ?? null;
+  const das = asset?.image ?? null;
+  if (dex && dex.includes("cdn.dexscreener.com")) return dex;
+  if (das) return das;
+  return dex;
+}
+
 export async function analyzeToken(ca: string): Promise<TokenAnalysis> {
   return cached(`analysis:${ca}`, TTL.AI_SYNTHESIS_S, () => buildAnalysis(ca));
 }
@@ -76,7 +103,7 @@ async function buildFast(ca: string): Promise<FastAnalysis> {
     symbol: asset?.symbol ?? dexPair?.baseToken.symbol ?? null,
     decimals: asset?.decimals ?? mintInfo?.decimals ?? null,
     supply: asset?.supply ?? mintInfo?.supply ?? null,
-    image: asset?.image ?? dexPair?.info?.imageUrl ?? null,
+    image: pickBestTokenImage(asset, dexPair?.info),
     description: asset?.description ?? null,
     mint_authority: asset?.mint_authority ?? mintInfo?.mintAuthority ?? null,
     freeze_authority: asset?.freeze_authority ?? mintInfo?.freezeAuthority ?? null,
@@ -259,7 +286,7 @@ async function buildAnalysis(ca: string): Promise<TokenAnalysis> {
     symbol: asset?.symbol ?? dexPair?.baseToken.symbol ?? null,
     decimals: asset?.decimals ?? mintInfo?.decimals ?? null,
     supply: asset?.supply ?? mintInfo?.supply ?? null,
-    image: asset?.image ?? dexPair?.info?.imageUrl ?? null,
+    image: pickBestTokenImage(asset, dexPair?.info),
     description: asset?.description ?? null,
     mint_authority: asset?.mint_authority ?? mintInfo?.mintAuthority ?? null,
     freeze_authority: asset?.freeze_authority ?? mintInfo?.freezeAuthority ?? null,

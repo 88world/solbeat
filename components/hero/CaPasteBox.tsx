@@ -172,14 +172,18 @@ export function CaPasteBox({ onPulse, heat = 0 }: Props) {
                   : "shadow-[0_10px_28px_rgba(10,10,30,0.06),0_0_0_1px_rgba(10,10,30,0.05)]"
           }`}
           style={{
-            background: "rgba(255, 255, 255, 0.92)",
+            // Theme-aware bg — was hardcoded white, which made the dark-mode
+            // input text (also light) invisible. --glass-frost is white-tinted
+            // in light theme and dark-tinted in dark theme, so contrast is
+            // preserved against the input text color in both modes.
+            background: "var(--glass-frost)",
             backdropFilter: "blur(20px) saturate(170%)",
             WebkitBackdropFilter: "blur(20px) saturate(170%)",
             border: error
               ? "1px solid rgba(255, 71, 87, 0.4)"
               : focused
                 ? "1px solid transparent"
-                : "1px solid rgba(10, 10, 30, 0.05)",
+                : "1px solid var(--border-subtle)",
           }}
         >
           <div className="pl-3.5 pr-2.5 text-text-muted">

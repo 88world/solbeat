@@ -59,7 +59,7 @@ export function SignalPanel({ analysis }: { analysis: TokenAnalysis }) {
         <Tally label="Good" count={counts.good ?? 0} color="#0a8f57" />
         <Tally label="Watch" count={counts.warn ?? 0} color="#d6601a" />
         <Tally label="Bad" count={counts.bad ?? 0} color="#c1374a" />
-        <Tally label="Neutral" count={counts.neutral ?? 0} color="#5a5a70" />
+        <Tally label="Neutral" count={counts.neutral ?? 0} color="var(--text-secondary)" />
       </div>
     </div>
   );
@@ -96,7 +96,9 @@ function Tally({
 function SignalPill({ signal }: { signal: Signal }) {
   const styles: Record<Severity, { bg: string; color: string; ring: string }> = {
     good:    { bg: "rgba(20, 241, 149, 0.10)", color: "#0a6f47", ring: "rgba(20, 241, 149, 0.35)" },
-    neutral: { bg: "rgba(10, 10, 30, 0.05)",   color: "#4a4a5e", ring: "rgba(10, 10, 30, 0.10)" },
+    // Neutral pill: was hardcoded near-black bg + near-black text, invisible
+    // on dark theme. Both flipped to theme-aware so the chip reads on either.
+    neutral: { bg: "var(--glass-soft)",        color: "var(--text-secondary)", ring: "var(--border-subtle)" },
     warn:    { bg: "rgba(214, 96, 26, 0.10)",  color: "#d6601a", ring: "rgba(214, 96, 26, 0.30)" },
     bad:     { bg: "rgba(193, 55, 74, 0.10)",  color: "#c1374a", ring: "rgba(193, 55, 74, 0.30)" },
   };

@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
-const STORAGE_KEY = "solbeat:theme";
+// v2: we changed the default from light to dark. Bumping the storage key
+// invalidates every existing user's stored preference so they all get the
+// new dark default on next visit. Users who explicitly toggle to light
+// after that get their new preference saved under the v2 key and persist
+// normally from there.
+const STORAGE_KEY = "solbeat:theme:v2";
 
 /**
  * Theme toggle. Reads/writes data-theme on the document root and persists

@@ -345,9 +345,12 @@ function HoverCard({ snap }: { snap: PulseSnapshot }) {
             <span
               key={i}
               className="px-1.5 py-0.5 rounded-full text-[9px] uppercase tracking-[0.10em] font-bold"
+              // Signal pills under each pulse reading. Theme-aware so the
+              // chip is legible on dark — was hardcoded near-black bg + near-
+              // black text which collapsed to invisible-on-invisible on dark.
               style={{
-                background: "rgba(10, 10, 30, 0.05)",
-                color: "#3a3a4e",
+                background: "var(--glass-soft)",
+                color: "var(--text-secondary)",
               }}
             >
               {s}

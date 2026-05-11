@@ -256,13 +256,21 @@ function RecoverableCallout({ sol, count }: { sol: number; count: number }) {
         boxShadow: "inset 0 0 0 1px rgba(20, 241, 149, 0.30)",
       }}
     >
+      {/* Label stays in Solana-green at full saturation — reads on both
+          themes. The big value text was #0a4f2c (very dark forest green),
+          which was invisible on dark bg; replaced with the brighter Solana
+          green so it pops in dark mode while still being saturated enough
+          to be legible against the green-tinted callout in light mode. */}
       <div className="text-[9px] uppercase tracking-[0.20em] font-bold text-[#0a8f57]">
         Recoverable SOL
       </div>
-      <div className="font-mono font-bold tabular-nums text-[15px] text-[#0a4f2c] mt-0.5">
+      <div
+        className="font-mono font-bold tabular-nums text-[15px] mt-0.5"
+        style={{ color: "#14F195" }}
+      >
         {sol.toFixed(4)} ◎
       </div>
-      <div className="text-[10px] text-text-muted mt-0.5">
+      <div className="text-[10px] text-text-secondary mt-0.5">
         Locked in {count} empty account{count === 1 ? "" : "s"}
       </div>
     </div>

@@ -158,8 +158,15 @@ export function HiddenSolHero({
           <div className="flex items-baseline gap-3 flex-wrap">
             <span
               ref={numberRef}
-              className="text-[40px] sm:text-[52px] font-black text-mono tabular-nums leading-none tracking-tight"
-              style={{ color: "var(--text-primary)" }}
+              // Brand shimmer applied to the big SOL number, same gradient
+              // as "The pulse of Solana." headline on the homepage. Works
+              // in both light + dark themes because bg-clip:text inherits
+              // from the gradient, not from --text-primary.
+              className="inline-block bg-clip-text text-transparent text-shimmer text-[40px] sm:text-[52px] font-black text-mono tabular-nums leading-none tracking-tight"
+              style={{
+                backgroundImage:
+                  "linear-gradient(110deg, #FF2D9C 0%, #5E5CFF 35%, #14F195 70%, #FF2D9C 100%)",
+              }}
             >
               {scan.user_receives_sol.toFixed(4)}
             </span>
@@ -171,8 +178,8 @@ export function HiddenSolHero({
             <span className="font-bold text-text-primary text-mono">
               {scan.account_count}
             </span>{" "}
-            empty token account{scan.account_count === 1 ? "" : "s"} sitting
-            on rent that&apos;s yours to take back. We clip{" "}
+            {scan.account_count === 1 ? "empty token account" : "empty token accounts"}{" "}
+            sitting on rent that&apos;s yours to take back. We clip{" "}
             {(scan.fee_bps / 100).toFixed(0)}% only if you reclaim.
           </div>
         </div>
@@ -180,16 +187,49 @@ export function HiddenSolHero({
         <button
           type="button"
           onClick={onJump}
-          className="shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13.5px] font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+          // Reclaim CTA — static brand gradient (no wipe) so the surface
+          // reads as a confident premium object, not a busy ad. Aliveness
+          // comes from the breathing pink glow halo (heartbeat cadence
+          // matching the rest of the brand) drawn as a separate ::after
+          // layer behind the button. Hover scales the whole thing, the
+          // glow intensifies, and the arrow nudges 2px right.
+          className="reclaim-cta group relative shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13.5px] font-bold text-white transition-transform hover:scale-[1.04] active:scale-[0.97]"
           style={{
-            background: "var(--text-primary)",
-            color: "var(--bg-primary)",
+            background:
+              "linear-gradient(110deg, #FF2D9C 0%, #5E5CFF 60%, #14F195 110%)",
             boxShadow:
-              "0 8px 22px rgba(10, 10, 30, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
+              "0 10px 28px rgba(255, 45, 156, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.12) inset",
           }}
         >
-          Reclaim now
-          <span aria-hidden className="text-[14px]">
+          {/* Breathing brand halo. Lives behind the button via negative
+              z-index so it doesn't clip the rounded edge. Animates at
+              the same 2.4s cadence as the heartbeat-dot keyframe used
+              elsewhere — pulses pink without being a wipe. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -inset-1.5 rounded-full"
+            style={{
+              background:
+                "radial-gradient(60% 80% at 50% 50%, rgba(255, 45, 156, 0.55) 0%, rgba(94, 92, 255, 0.25) 50%, transparent 75%)",
+              filter: "blur(14px)",
+              animation: "reclaim-glow-breathe 2.6s ease-in-out infinite",
+              zIndex: -1,
+            }}
+          />
+          {/* Subtle highlight overlay — static gloss for depth, no motion */}
+          <span
+            aria-hidden
+            className="absolute inset-0 pointer-events-none rounded-full"
+            style={{
+              background:
+                "radial-gradient(120% 60% at 30% 30%, rgba(255,255,255,0.22) 0%, transparent 60%)",
+            }}
+          />
+          <span className="relative">Reclaim now</span>
+          <span
+            aria-hidden
+            className="relative text-[14px] transition-transform group-hover:translate-x-0.5"
+          >
             →
           </span>
         </button>

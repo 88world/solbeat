@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { animate, stagger } from "animejs";
+import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
 
 // LiveFlow imports three.js (~600KB), lazy-load so the initial homepage
@@ -196,7 +197,12 @@ export function Hero() {
 
           <div
             data-sphere-in
-            className="flex items-center justify-start min-h-0"
+            // hidden lg:flex — the LiveFlow particle viz is desktop-only.
+            // On mobile it costs ~300px vertical for an ambient visual most
+            // users glance past; the mobile section below moves it into a
+            // collapsed disclosure under TrendingList so it stays accessible
+            // but doesn't dominate the small viewport.
+            className="hidden lg:flex items-center justify-start min-h-0"
           >
             <LiveFlow tokens={tokens} size={sphereSize} heat={heat} />
           </div>
@@ -209,7 +215,12 @@ export function Hero() {
           <TickerTape tokens={tokens} heat={heat} />
         </div>
 
-        {/* Mobile stack: pulse, trending, chart below the sphere */}
+        {/* Mobile stack. Order matters: ECG-bearing MarketPulse leads so
+            the brand's "pulse" identity reads instantly when the page
+            loads. LiveFlow is parked at the bottom inside a collapsed
+            disclosure — mobile users tend to skim, the buy/sell particle
+            visual is decorative not data, so it's opt-in rather than
+            forced into the scroll. */}
         <div
           className="lg:hidden flex flex-col gap-3 items-stretch"
           data-fade-up
@@ -219,8 +230,103 @@ export function Hero() {
           <LiveChart tokens={tokens} limit={5} />
           <TickerTape tokens={tokens} heat={heat} />
           <TrendingList limit={4} heat={heat} tokens={tokens} />
+          <MobileFlowDisclosure tokens={tokens} heat={heat} />
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Collapsible LiveFlow wrapper for the mobile stack. The buy/sell particle
+ * field is brand decoration, not a data primitive — on a 375px viewport
+ * it eats prime above-the-fold real estate that should belong to ECG,
+ * trending, and the activity feed. Tucking it behind a tap-to-expand
+ * keeps the visual available without forcing it into every scroll.
+ *
+ * Implementation uses a controlled state + framer-motion height animation
+ * so the expand/collapse feels native to the brand (matches the smooth
+ * cadence of TrendingList row entry). `LiveFlow` itself only mounts when
+ * expanded — no three.js cost when collapsed, no unmount-flicker if the
+ * user re-opens it within the same session because we keep it alive once
+ * opened.
+ */
+function MobileFlowDisclosure({
+  tokens,
+  heat,
+}: {
+  tokens: TrendingToken[];
+  heat: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [everOpened, setEverOpened] = useState(false);
+
+  return (
+    <div
+      className="rounded-2xl overflow-hidden"
+      style={{
+        background: "var(--glass-medium)",
+        border: "1px solid var(--border-subtle)",
+        boxShadow:
+          "0 1px 0 rgba(255,255,255,0.08) inset, 0 6px 18px rgba(10, 10, 30, 0.04)",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((o) => !o);
+          if (!everOpened) setEverOpened(true);
+        }}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          {/* Tiny green/pink pip pair — visual shorthand for "buy/sell flow" */}
+          <span className="flex items-center gap-0.5 shrink-0">
+            <span
+              className="size-1.5 rounded-full"
+              style={{ background: "#14F195" }}
+            />
+            <span
+              className="size-1.5 rounded-full"
+              style={{ background: "#FF2D9C" }}
+            />
+          </span>
+          <span className="text-[10.5px] uppercase tracking-[0.22em] font-bold text-text-secondary">
+            Buy / sell flow
+          </span>
+          <span className="text-[10px] text-text-muted normal-case tracking-normal">
+            · tap to {open ? "hide" : "show"}
+          </span>
+        </div>
+        <span
+          aria-hidden
+          className="text-[14px] text-text-muted transition-transform"
+          style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+        >
+          ▾
+        </span>
+      </button>
+
+      {/* Smooth height + opacity reveal. We render LiveFlow only after the
+          first open; subsequent collapses keep it mounted (the height is
+          animated to 0 + display:none-equivalent) so re-opening is instant. */}
+      <AnimatePresence initial={false}>
+        {open && everOpened && (
+          <motion.div
+            key="flow-body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="px-3 pb-3 flex justify-center">
+              <LiveFlow tokens={tokens} size={300} heat={heat} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

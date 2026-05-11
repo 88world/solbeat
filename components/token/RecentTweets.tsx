@@ -17,8 +17,18 @@ export function RecentTweets({ tweets }: { tweets: TweetSnippet[] }) {
   if (tweets.length === 0) {
     return null;
   }
+  // Two-tier sort: verified / >100K-follower accounts first, then by
+  // engagement within each tier. A blue-check with 80 likes is more
+  // signal than an anonymous account with 800 likes, so the tier ranking
+  // dominates the engagement count.
+  const tier = (t: TweetSnippet): number =>
+    t.verified || t.followers > 100_000 ? 1 : 0;
   const top = [...tweets]
-    .sort((a, b) => b.engagement - a.engagement)
+    .sort((a, b) => {
+      const tierDiff = tier(b) - tier(a);
+      if (tierDiff !== 0) return tierDiff;
+      return b.engagement - a.engagement;
+    })
     .slice(0, 6);
 
   // Aggregate stats for the header.
@@ -44,7 +54,7 @@ export function RecentTweets({ tweets }: { tweets: TweetSnippet[] }) {
           </p>
         </div>
         <span className="text-[9.5px] uppercase tracking-[0.20em] text-text-muted font-bold">
-          ranked by reach
+          blue-checks first
         </span>
       </div>
       {/* Two-column dense grid on wider screens so we can fit more cards
