@@ -8,6 +8,7 @@ import { ReclaimPanel } from "./ReclaimPanel";
 import { WalletSignalPanel } from "./WalletSignalPanel";
 import { HiddenSolHero } from "./HiddenSolHero";
 import { WalletIntelPanel } from "./WalletIntelPanel";
+import { TrackedWalletsList } from "@/components/wallet-profile/TrackedWalletsList";
 import { cn, shortAddress } from "@/lib/utils";
 
 type Tab = "portfolio" | "reclaim";
@@ -105,6 +106,13 @@ export function WalletPulseClient() {
           Pulse a tool, not just a viewer. Fetches /api/wallet/{addr}/intel
           which is server-cached for 20s. */}
       <WalletIntelPanel address={publicKey.toBase58()} />
+
+      {/* Tracked wallets — same component that renders on /wallet/[address]
+          public profiles. Self-gates on owner === profileAddress, so feeding
+          the connected publicKey is what activates it here. Lets users
+          curate the watchlist that drives the Live Wire tracked-move
+          notifications without bouncing through their public profile URL. */}
+      <TrackedWalletsList profileAddress={publicKey.toBase58()} />
 
       {!loading && held && (
         <WalletSignalPanel held={held} emptyCount={emptyCount} />
