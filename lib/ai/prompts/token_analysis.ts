@@ -51,17 +51,26 @@ export async function generateTokenSynthesis(
       top_10_pct: input.holders.top_10_pct,
       sample_size: input.holders.top_20.length,
     },
-    tweets: input.tweets.slice(0, 25).map((t) => ({
+    // Tweet payload trimmed 25 → 12 + 220 → 180 chars per tweet to
+    // shave ~700 input tokens per synthesis call. The top-12 by
+    // engagement carries 90% of the actual signal; tweets ranked
+    // 13-25 are usually low-engagement noise that the model
+    // de-weights anyway. Net effect: ~$0.001 saved per analysis
+    // (Haiku rate), compounding across visitors.
+    tweets: input.tweets.slice(0, 12).map((t) => ({
       handle: t.handle,
       followers: t.followers,
-      text: t.text.slice(0, 220),
+      text: t.text.slice(0, 180),
       engagement: t.engagement,
       age_minutes: t.age_minutes,
     })),
-    catalysts: input.catalysts.slice(0, 6).map((c) => ({
+    // Catalysts 6 → 4 + 280 → 220 chars. Perplexity tends to
+    // dilute past 4 items anyway — the first three are the
+    // headlines, the rest are stale repeats.
+    catalysts: input.catalysts.slice(0, 4).map((c) => ({
       source: c.source,
       title: c.title,
-      summary: c.summary.slice(0, 280),
+      summary: c.summary.slice(0, 220),
     })),
   };
 

@@ -61,7 +61,7 @@ DEXScreener shows you 47 numbers. SolBeat tells you what they mean. The AI synth
 | App | Next.js 16, TypeScript 5, Tailwind v4, shadcn/ui |
 | Animation | Three.js, anime.js, framer-motion, D3 |
 | Solana | wallet-adapter, Helius RPC, Birdeye, DexScreener, Jupiter v6 |
-| AI | Anthropic Claude Sonnet 4.5, Perplexity Sonar Pro |
+| AI | Anthropic Claude Haiku 4.5 (with prompt caching), Perplexity Sonar Pro |
 | Social | twitterapi.io |
 | Caching | Upstash Redis (optional, in-memory fallback) |
 | Deploy | Vercel |

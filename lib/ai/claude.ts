@@ -31,11 +31,21 @@ function getClient(): Anthropic | null {
   return client;
 }
 
-export const SOLBEAT_MODEL = "claude-sonnet-4-5-20250929";
+// Haiku 4.5 instead of Sonnet 4.5 — same prompt engineering, ~4x cheaper
+// input + output ($0.80/$4 per 1M vs $3/$15). The work SolBeat asks the
+// model to do is JSON-shape compliance + brand-voice prose, both well
+// within Haiku's ceiling. The Sonnet bill on May 11 (~1.36M input tokens
+// uncached, 0% cache rate) made the change non-optional.
+export const SOLBEAT_MODEL = "claude-haiku-4-5-20251001";
 
 /**
  * Run a single non-streaming Claude call. Returns raw text or null on failure.
  * Caller is responsible for prompts and parsing.
+ *
+ * Prompt caching is on by default — the system prompt is wrapped with
+ * `cache_control: ephemeral` so repeated calls within ~5 min get 90% off
+ * the cached portion. Combined with the Haiku rate this should drop the
+ * input bill ~85% on a typical hour of token-page traffic.
  */
 export async function runClaude(opts: {
   system: string;
@@ -64,7 +74,20 @@ export async function runClaude(opts: {
       model: opts.model ?? SOLBEAT_MODEL,
       max_tokens: opts.maxTokens ?? 1024,
       temperature: opts.temperature ?? 0.3,
-      system: opts.system,
+      // System prompt as a structured TextBlockParam with cache_control
+      // so Anthropic caches it across calls. The first call within a
+      // 5-min window pays a 25% write-premium on the cached portion;
+      // every subsequent call pays 10% of the normal input rate for
+      // those tokens. For SolBeat, the synthesis + risk system prompts
+      // are stable, so the cache hit rate should be near-100% on warm
+      // production traffic.
+      system: [
+        {
+          type: "text",
+          text: opts.system,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
       messages: [{ role: "user", content: opts.user }],
     });
     const block = msg.content.find((b) => b.type === "text");
