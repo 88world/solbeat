@@ -1,7 +1,8 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { isValidSolanaAddress } from "@/lib/solana/validation";
+import { getAccountKind } from "@/lib/data/helius";
 import {
   analyzeFast,
   analyzeSlow,
@@ -59,6 +60,16 @@ export default async function TokenPage({ params }: PageProps) {
     fast.market.liquidity_usd == null;
 
   if (noData) {
+    // The CA didn't resolve as a token. Before showing the 404, check if
+    // it's actually a *wallet* — if so, redirect the user to the wallet
+    // profile page automatically. This is the single highest-frequency
+    // "wrong route" path: people paste their own wallet expecting to see
+    // a token page.
+    const kindInfo = await getAccountKind(ca);
+    if (kindInfo.kind === "wallet") {
+      redirect(`/wallet/${ca}`);
+    }
+
     return (
       <div
         className="flex flex-col min-h-screen"

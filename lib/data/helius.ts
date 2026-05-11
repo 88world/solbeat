@@ -240,4 +240,117 @@ export async function getTokenAccountsByOwner(
   return result?.value ?? [];
 }
 
+/**
+ * Classify what an address is from a single RPC roundtrip. The on-chain
+ * "owner" of the account tells us whether it's a regular wallet (owned by
+ * the System Program), an SPL token mint or account (owned by the Token
+ * Program), or a program. We use this to route any pasted address to the
+ * right page — wallets go to /wallet/[address], mints go to /token/[ca].
+ *
+ * Returns "unknown" when the account doesn't exist on-chain yet (fresh
+ * wallet that's never received SOL, or just a typo).
+ */
+export type AccountKind =
+  | "wallet"        // System Program owner, normal user account
+  | "token-mint"    // Token / Token-2022 program, parsed.type = "mint"
+  | "token-account" // SPL token account holding a balance (NOT a mint!)
+  | "program"       // executable = true
+  | "unknown";
+
+const SYSTEM_PROGRAM = "11111111111111111111111111111111";
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+
+type AccountInfoResp = {
+  value: {
+    owner?: string;
+    executable?: boolean;
+    lamports?: number;
+    data?: {
+      parsed?: { type?: string; info?: unknown };
+      program?: string;
+    } | unknown[];
+  } | null;
+};
+
+export async function getAccountKind(address: string): Promise<{
+  kind: AccountKind;
+  lamports: number;
+}> {
+  const result = await rpc<AccountInfoResp>("getAccountInfo", [
+    address,
+    { encoding: "jsonParsed" },
+  ]);
+  const v = result?.value;
+  if (!v) return { kind: "unknown", lamports: 0 };
+  const lamports = v.lamports ?? 0;
+  if (v.executable) return { kind: "program", lamports };
+  const owner = v.owner;
+  if (owner === SYSTEM_PROGRAM) return { kind: "wallet", lamports };
+  if (owner === TOKEN_PROGRAM || owner === TOKEN_2022_PROGRAM) {
+    const parsed =
+      v.data && !Array.isArray(v.data) ? v.data.parsed : undefined;
+    if (parsed?.type === "mint") return { kind: "token-mint", lamports };
+    if (parsed?.type === "account") return { kind: "token-account", lamports };
+  }
+  return { kind: "unknown", lamports };
+}
+
+/** Lamports → SOL helper (1 SOL = 1e9 lamports). */
+export function lamportsToSol(lamports: number): number {
+  return lamports / 1_000_000_000;
+}
+
+/**
+ * Fetch the oldest + newest transaction signatures for a wallet so we can
+ * (a) compute wallet age from first activity, (b) build a 90-day activity
+ * heatmap. Solana RPC's getSignaturesForAddress is paginated reverse-chrono;
+ * we ask for `limit` signatures and walk back further using the `before`
+ * cursor when we want history beyond the most recent batch.
+ */
+export type SignatureRow = {
+  signature: string;
+  slot: number;
+  blockTime: number | null; // unix seconds
+  err: unknown;
+};
+
+export async function getSignaturesForAddress(
+  address: string,
+  opts: { limit?: number; before?: string } = {},
+): Promise<SignatureRow[]> {
+  const params: [string, { limit: number; before?: string }] = [
+    address,
+    { limit: Math.min(1000, opts.limit ?? 1000) },
+  ];
+  if (opts.before) params[1].before = opts.before;
+  const result = await rpc<SignatureRow[]>(
+    "getSignaturesForAddress",
+    params,
+  );
+  return result ?? [];
+}
+
+/**
+ * Pull up to ~3000 signatures (3 pages of 1000) so we can render a 90-day
+ * heatmap that doesn't bottom out at the most recent few hundred txns.
+ * Returns oldest-first so downstream binning is straightforward.
+ */
+export async function getRecentSignatures(
+  address: string,
+  maxPages = 3,
+): Promise<SignatureRow[]> {
+  const all: SignatureRow[] = [];
+  let before: string | undefined;
+  for (let i = 0; i < maxPages; i++) {
+    const page = await getSignaturesForAddress(address, { limit: 1000, before });
+    if (page.length === 0) break;
+    all.push(...page);
+    if (page.length < 1000) break;
+    before = page[page.length - 1].signature;
+  }
+  // Oldest first.
+  return all.reverse();
+}
+
 export { HELIUS_RPC };
