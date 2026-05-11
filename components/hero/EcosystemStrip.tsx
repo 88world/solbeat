@@ -328,9 +328,12 @@ function NFTCard({ nft }: { nft: SolanaNFTSnapshot | null }) {
       deltaColor="#5a5a70"
     >
       <div className="mt-1.5 flex items-center gap-1">
-        {nft.collections.slice(0, 5).map((c) => (
+        {nft.collections.slice(0, 5).map((c, i) => (
           <span
-            key={c.symbol}
+            // Magic Eden occasionally returns two rows under the same
+            // symbol (sub-collections, renames). Compose the key so React
+            // never collides on duplicates.
+            key={`${c.symbol}-${i}`}
             className="size-5 rounded-md bg-white/40 overflow-hidden border border-border-subtle shrink-0"
             title={`${c.name} · ${c.floor_sol != null ? c.floor_sol.toFixed(2) + " ◎" : ""}`}
           >
