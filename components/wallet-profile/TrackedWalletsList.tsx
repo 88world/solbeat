@@ -146,8 +146,8 @@ export function TrackedWalletsList({ profileAddress }: { profileAddress: string 
             <button
               type="button"
               onClick={() => untrack(entry.addr)}
-              className="text-[10.5px] uppercase tracking-[0.16em] font-bold transition"
-              style={{ color: "#c1374a" }}
+              className="text-[10.5px] uppercase tracking-[0.16em] font-bold transition opacity-80 hover:opacity-100"
+              style={{ color: "var(--signal-negative)" }}
             >
               Untrack
             </button>

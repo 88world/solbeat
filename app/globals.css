@@ -14,10 +14,17 @@
 
   --text-primary: #f5f5fa;
   --text-secondary: #a0a0b0;
-  --text-muted: #606070;
+  /* Bumped from #606070 (~3.2:1 against bg, fails WCAG body min) to
+     #8a8a9e (~6.4:1). Eyebrow labels, address truncations, and tertiary
+     captions now actually read without leaning into the screen. */
+  --text-muted: #8a8a9e;
 
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-emphasized: rgba(255, 255, 255, 0.12);
+  /* Bumped subtle from 6% → 10% white and emphasized 12% → 18% so card
+     outlines and row hover states register against the near-black bg.
+     The differential between rest and hover is preserved so affordance
+     still reads as "this got more present". */
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --border-emphasized: rgba(255, 255, 255, 0.18);
 
   --accent-primary: #6b7fff;     /* Block Valley brand blue/purple */
   --accent-secondary: #14f195;   /* Solana green */
