@@ -7,32 +7,14 @@ import type {
   TokenSynthesis,
 } from "@/types/token";
 import { runClaude } from "@/lib/ai/claude";
+import { loadSystemPrompt } from "@/lib/ai/load-prompt";
 
-export const TOKEN_ANALYSIS_SYSTEM = `You are SolBeat, an AI analyst that turns Solana token data into clear, honest, plain-English reads for crypto traders. You write the way a senior trader would explain a token to a friend over a beer, direct, useful, no jargon when plain words will do, no hedging when the data is clear. You never shill, you never moralize, you tell the user what's actually happening and what they should watch out for.
-
-You will receive a JSON payload with on-chain data, recent tweets, and recent news for a Solana token. Your job is to write exactly three short sections in the JSON output below.
-
-WHAT_THIS_IS, origin, supply, age, deployer, holder structure. 2-3 sentences. Lead with the most distinguishing fact.
-
-WHATS_HAPPENING, recent price action, volume changes, holder movement (accumulation/distribution), social sentiment direction, any catalyst from the news/tweets data. 3-4 sentences. Be specific about timeframes.
-
-WHAT_TO_KNOW, the honest risks and signals. LP status, mint/freeze authority, holder concentration, age vs volume sustainability, any red flags. End with one direct line on what would change your read.
-
-Rules:
-- No emojis. No exclamation marks. No "to the moon" language.
-- No em dashes (—). Never. Use periods or commas instead. This is a hard rule.
-- No price predictions or buy/sell recommendations.
-- If data is missing, say so explicitly. Don't invent.
-- If a token looks like a likely scam, say so plainly with the specific reasons.
-- Use exact numbers when meaningful, rounded humanized numbers otherwise (e.g. "47% of supply" not "47.3284%").
-- Total length: 180-260 words across all three sections combined.
-
-Return ONLY a single JSON object with this exact shape and no other text:
-{
-  "what_this_is": "<2-3 sentences>",
-  "whats_happening": "<3-4 sentences>",
-  "what_to_know": "<2-3 sentences>"
-}`;
+/**
+ * The token-analysis system prompt lives in the env var
+ * `CLAUDE_SYSTEM_PROMPT_TOKEN_ANALYSIS` and is loaded at call time.
+ * See lib/ai/load-prompt.ts for why prompts are out-of-source.
+ */
+const SYSTEM_PROMPT_KEY = "CLAUDE_SYSTEM_PROMPT_TOKEN_ANALYSIS";
 
 export type TokenAnalysisInput = {
   metadata: TokenMetadata;
@@ -45,6 +27,12 @@ export type TokenAnalysisInput = {
 export async function generateTokenSynthesis(
   input: TokenAnalysisInput,
 ): Promise<TokenSynthesis | null> {
+  // Pull the system prompt from env at call time. Missing env →
+  // gracefully return null so the UI shows "AI synthesis unavailable"
+  // rather than calling Claude with an empty system message.
+  const system = loadSystemPrompt(SYSTEM_PROMPT_KEY);
+  if (!system) return null;
+
   const compactPayload = {
     ca: input.metadata.ca,
     metadata: {
@@ -78,7 +66,7 @@ export async function generateTokenSynthesis(
   };
 
   const text = await runClaude({
-    system: TOKEN_ANALYSIS_SYSTEM,
+    system,
     user: `Analyze this Solana token:\n\n${JSON.stringify(compactPayload, null, 2)}\n\nReturn only the JSON object.`,
     maxTokens: 1200,
     temperature: 0.3,

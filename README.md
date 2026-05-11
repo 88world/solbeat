@@ -1,107 +1,176 @@
 # SolBeat
 
-**The pulse of every Solana token, in plain English.**
+The pulse of every Solana token, in plain English.
 
-SolBeat turns any Solana token contract into a one-paragraph human read. Paste a CA, see real-time on-chain data, X sentiment, and recent catalysts synthesized into plain English by an AI reasoning layer. Connect your wallet to see your portfolio's pulse and reclaim locked SOL from dead memecoin trades.
+![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Solana Frontier Hackathon](https://img.shields.io/badge/Solana%20Frontier-2026-9945FF)
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
 
-Built by [Block Valley Labs](https://blockvalley.io) for the Solana Frontier Hackathon (Colosseum).
+🟢 Live at [solbeat.blockvalley.io](https://solbeat.blockvalley.io)
 
-## What it does
+---
 
-- **Token Intel.** Paste any Solana mint, get a 3-paragraph plain-English read powered by Claude Sonnet — what the token is, what's happening right now, and what to know. On-chain data + X sentiment + Perplexity-driven catalysts in one synthesis.
-- **Risk Score.** Composite 0–100 score with breakdown across liquidity, holder concentration, mint/freeze authority, age, and volume quality. Heuristic baseline + AI refinement.
-- **Wallet Pulse.** Connect Phantom / Solflare and see your portfolio at a glance.
-- **Hidden SOL.** Find empty SPL token accounts holding rent SOL from dead trades. One signature reclaims the lot. We take 5%, you keep 95%.
-- **Jupiter Swap.** Floating swap panel routes through Jupiter v6 with a 0.20% platform fee.
-- **Trending Ring.** Cinematic rotating ring of trending Solana tokens on the hero, refreshed every minute from DexScreener.
+## The 30-second pitch
 
-## Stack
+SolBeat reads any Solana token the way a senior trader would explain it to a friend. Paste a contract address, get a three-paragraph synthesis covering origin, what is happening, and what to watch. The synthesis fuses on-chain data, X sentiment, and live news into one read, so a degen can decide in seconds instead of context-switching across five tools.
 
-- **Next.js 16** (App Router) + **TypeScript** + **Tailwind v4**
-- **Three.js** WebGL pulse sphere with vertex-shader displacement
-- **Anthropic Claude Sonnet 4.5** for the reasoning layer
-- **Helius** RPC for on-chain reads (DAS API for metadata)
-- **Birdeye** for price + OHLCV
-- **DexScreener** for pair / liquidity / trending
-- **Perplexity sonar-pro** for catalyst synthesis with citations
-- **twitterapi.io** for X sentiment scraping
-- **Jupiter v6** for swap execution
-- **@solana/wallet-adapter** for wallet connection
-- **Upstash Redis** for caching (with in-memory fallback)
+DEXScreener shows you 47 numbers. SolBeat tells you what they mean. The AI synthesis is the differentiator. Everything else is plumbing.
+
+---
+
+## Screenshots
+
+![Hero](docs/screenshots/hero.png)
+
+![Token detail with AI synthesis](docs/screenshots/token.png)
+
+![Wallet pulse with reclaim flow](docs/screenshots/wallet.png)
+
+---
+
+## Features
+
+🫀 **Token Pulse.** Paste any CA, get a three-paragraph AI synthesis covering what the token is, what is happening right now, and what to watch out for.
+
+💰 **Wallet Pulse.** Connect a wallet, see per-position risk scores, a USD-weighted aggregate risk dial (SAFE / CAUTIOUS / LOADED / DANGER), and smart-money overlap chips that flag when you hold the same tokens as a curated KOL leaderboard.
+
+🔥 **Hidden SOL Reclaim.** Surface SOL locked in empty token accounts and reclaim it in a single transaction.
+
+🔄 **Built-in Swap.** Jupiter v6 routing baked in, no app-switching to trade what you just analyzed.
+
+📡 **Live Catalysts.** Perplexity-sourced news and X sentiment for the last 24 hours, with citations to every claim.
+
+🎯 **Risk Scoring.** Composite 0-100 score with a factor breakdown across liquidity, holder concentration, mint/freeze authorities, age, and volume-quality. Falls back to a pure-TypeScript heuristic when no AI key is set.
+
+---
+
+## Why SolBeat
+
+- **DEXScreener shows you 47 numbers. SolBeat tells you what they mean.**
+- **First Solana analytics tool combining on-chain data, X sentiment, and live news in one AI synthesis.**
+- **Built for the speed Solana enables: sub-second analysis, cheap reclaims, instant swaps.**
+- **Open-core: integration layer is MIT, reasoning layer is proprietary Block Valley IP.**
+
+---
+
+## Tech Stack
+
+| Layer | Tools |
+|---|---|
+| App | Next.js 16, TypeScript 5, Tailwind v4, shadcn/ui |
+| Animation | Three.js, anime.js, framer-motion, D3 |
+| Solana | wallet-adapter, Helius RPC, Birdeye, DexScreener, Jupiter v6 |
+| AI | Anthropic Claude Sonnet 4.5, Perplexity Sonar Pro |
+| Social | twitterapi.io |
+| Caching | Upstash Redis (optional, in-memory fallback) |
+| Deploy | Vercel |
+
+---
 
 ## Architecture
 
+The data flow for a single token analysis:
+
 ```
-User pastes CA
-   ↓
-[Hero] /token/[ca]
-   ↓
-analyzeToken(ca) — Redis cache check
-   ↓ (miss)
-parallel fetch:
-   ├─ Helius DAS getAsset           → metadata, supply, authorities
-   ├─ Helius getTokenLargestAccounts → holder concentration
-   ├─ DexScreener best Solana pair   → price, volume, liquidity, dex
-   ├─ Birdeye token_overview         → price changes (1h/24h/7d), holders
-   ├─ Perplexity sonar-pro           → recent news + sentiment with citations
-   └─ twitterapi.io advanced_search  → 50 most recent tweets, ranked by engagement
-   ↓
-parallel synthesis:
-   ├─ Claude token_analysis (3 paragraphs, 180–260 words)
-   └─ Claude risk_assessment (structured JSON, heuristic fallback)
-   ↓
-cache 10min, render
+  User pastes CA
+        │
+        ▼
+  Validation (base58, 32-byte decode)
+        │
+        ▼
+  ┌─────────────── Parallel fetch ──────────────────────────┐
+  │  Helius RPC          on-chain metadata + mint state     │
+  │  DexScreener         price, liquidity, 5m/1h/24h moves  │
+  │  Birdeye             market data enrichment             │
+  │  twitterapi.io       recent X posts + engagement        │
+  │  Perplexity Sonar    live news + sourced catalysts      │
+  └─────────────────────────────────────────────────────────┘
+        │
+        ▼
+  Claude synthesis (3-paragraph read + risk score)
+        │
+        ▼
+  Redis cache (Upstash) or in-memory fallback
+        │
+        ▼
+  Initial render: streamed via React Server Components + Suspense
+  (analyzeFast lands above-the-fold first, analyzeSlow streams in behind)
+        │
+        ▼
+  Hydration: client components (PriceCard, BuySellPressure, BondingCurve)
+  then poll /api/token/[ca]/quick + /api/token/[ca]/pump for live updates
 ```
 
-The reasoning prompts in `lib/ai/prompts/` are the actual moat — the Block Valley reasoning layer applied to Solana token data. The integration code is open-source (MIT); the prompts are versioned in this repo because we're hackathon-submission stage, but the production version will live in a private package consumed at build time.
+**Graceful degradation contract.** Missing API keys disable their feature, they never crash the build. Helius missing falls back to the public RPC. Birdeye missing falls back to DexScreener. Perplexity missing renders an empty Catalysts panel. Redis missing falls back to a per-process in-memory cache. Anthropic missing falls back to a pure-TypeScript risk heuristic. The site loads and the core flow works even with only Helius configured.
 
-## Setup
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node 20 or higher
+- npm or pnpm
+
+### Setup
 
 ```bash
+git clone https://github.com/blockvalley/solbeat.git
+cd solbeat
 npm install
-cp .env.example .env.local   # fill in keys you have
-npm run dev                  # http://localhost:3000
+cp .env.example .env.local
+# fill in the keys you need, see .env.example for required vs optional
+npm run dev
 ```
 
-The app degrades gracefully when keys are missing: with no `ANTHROPIC_API_KEY` you'll get on-chain data and a heuristic risk score but no AI synthesis; with no `BIRDEYE_API_KEY` it falls back to DexScreener for price; with no `UPSTASH_REDIS_*` it uses an in-memory cache.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Required env vars
+### Environment variables
 
-```
-HELIUS_API_KEY=                       # required for usable on-chain reads
-NEXT_PUBLIC_SOLANA_RPC=                # client-side RPC for wallet adapter
-ANTHROPIC_API_KEY=                    # for AI synthesis + risk scoring
-PERPLEXITY_API_KEY=                   # for the catalyst feed
-BIRDEYE_API_KEY=                      # for accurate price + multi-timeframe change
-TWITTERAPI_IO_KEY=                    # for X sentiment input to synthesis
-UPSTASH_REDIS_REST_URL=               # optional, falls back to in-memory
-UPSTASH_REDIS_REST_TOKEN=
-NEXT_PUBLIC_BV_TREASURY_WALLET=       # SOL receiving address for reclaim fee
-NEXT_PUBLIC_JUPITER_REFERRAL_ACCOUNT= # Jupiter referral fee account
-```
+See [`.env.example`](./.env.example) for the full reference. The file is grouped by purpose (Solana Data, AI, Social, Caching, Fee Accounts, AI Prompts) with `[REQUIRED]` / `[OPTIONAL]` markers on every key and a note explaining what each one does and where to get it.
 
-## Routes
+**The AI system prompts are not included in this repo.** They are proprietary Block Valley reasoning IP. Write your own to match the JSON contract in `lib/ai/prompts/`, or contact [admin@blockvalley.io](mailto:admin@blockvalley.io) for licensing.
 
-| Route | What it does |
-|---|---|
-| `/` | Hero — pulse sphere, trending ring, paste box |
-| `/token/[ca]` | Full analysis: synthesis, risk, holders, catalysts, tweets, swap |
-| `/wallet` | Wallet pulse: portfolio + Hidden SOL reclaim |
-| `/search?q=SYMBOL` | Symbol search (filters trending list) |
-| `/api/analyze` | POST/GET — full analysis JSON for a CA |
-| `/api/trending` | GET — trending Solana tokens for the ring |
-| `/api/wallet/[address]` | GET — wallet portfolio scan |
-| `/api/reclaim/scan` | GET — find reclaimable empty token accounts |
-| `/api/reclaim/build` | POST — build CloseAccount transactions in batches of 27 |
-| `/api/swap/quote` | GET — Jupiter quote proxy |
-| `/api/swap/build` | POST — Jupiter swap transaction builder |
+---
 
-## Revenue streams (live in v1)
+## Built With
 
-1. **Jupiter swap referral** — 0.20% platform fee on every swap routed through SolBeat.
-2. **Reclaim cut** — 5% of the SOL reclaimed from empty token accounts, transparently disclosed before signing.
-3. **Analysis API tier** *(roadmap)* — paid endpoint for agents and tools that want to call our synthesis layer.
+- [Helius](https://helius.dev) for Solana RPC and DAS
+- [Birdeye](https://birdeye.so) for market-data enrichment
+- [Jupiter](https://jup.ag) for swap routing
+- [DexScreener](https://dexscreener.com) for pair data
+- [Anthropic Claude](https://anthropic.com) for synthesis and risk reasoning
+- [Perplexity](https://perplexity.ai) for live catalysts and citations
+- [twitterapi.io](https://twitterapi.io) for X social signal
+- [Solana Foundation](https://solana.org) for the chain
+
+---
+
+## What's Next
+
+- **Compare Pulses.** Side-by-side analysis of two or more tokens, with a synthesized "which would you rather hold" verdict.
+- **Wallet copy-trade lookup.** Paste a wallet, get an AI summary of its trading thesis derived from public history.
+- **Skills marketplace.** Expose SolBeat's analysis as an agent-callable skill for other apps to plug in.
+- **Mobile native app.** iOS first.
+- **Real-time pulse notifications.** Watchlist a token, get pinged when its pulse meaningfully changes.
+
+---
 
 ## License
 
-MIT — frontend + integration code. The reasoning prompts in this repo are the current hackathon snapshot and will move to a private package post-submission.
+MIT for the open-source integration code in this repo. See [LICENSE](./LICENSE).
+
+The AI prompts that drive the reasoning layer are proprietary Block Valley Labs IP and are not included. Contact [admin@blockvalley.io](mailto:admin@blockvalley.io) for licensing.
+
+---
+
+## Acknowledgments
+
+Built for the [Solana Frontier Hackathon](https://www.colosseum.org/solana-frontier) by Colosseum.
+
+Shout to the [Solana Foundation](https://solana.org) for an ecosystem that lets you ship something this responsive in a weekend.
+
+---
+
+Built by Kenji at [Block Valley Labs](https://blockvalley.io). Contact: [admin@blockvalley.io](mailto:admin@blockvalley.io)

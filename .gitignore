@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# .env.example IS the template contributors copy when setting up — must
+# be committed. Negation goes after the .env* pattern so it overrides.
+!.env.example
 
 # vercel
 .vercel

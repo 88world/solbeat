@@ -1,7 +1,15 @@
 import type { CatalystItem } from "@/types/token";
 import { LIMITS } from "@/config/constants";
+import { loadSystemPrompt } from "@/lib/ai/load-prompt";
 
 const PPLX_KEY = process.env.PERPLEXITY_API_KEY ?? "";
+
+/**
+ * The catalyst-extraction system prompt lives in the env var
+ * `PERPLEXITY_SYSTEM_PROMPT_CATALYSTS` and is loaded at call time.
+ * See lib/ai/load-prompt.ts for why prompts are out-of-source.
+ */
+const SYSTEM_PROMPT_KEY = "PERPLEXITY_SYSTEM_PROMPT_CATALYSTS";
 
 type PplxMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -29,24 +37,19 @@ export async function fetchCatalysts(
 ): Promise<CatalystItem[]> {
   if (!PPLX_KEY) return [];
 
+  // System prompt is loaded from env at call time. Missing prompt →
+  // gracefully return [] so the Catalysts panel just shows "no
+  // catalysts" rather than crashing or sending an empty system.
+  const system = loadSystemPrompt(SYSTEM_PROMPT_KEY);
+  if (!system) return [];
+
   const messages: PplxMessage[] = [
-    {
-      role: "system",
-      content:
-        "You research what is currently driving price action for a Solana token and return concise, structured catalysts. " +
-        "Format your reply as a list. Each item is exactly two lines:\n" +
-        "  Line 1: a short bold title (no headers, no numbering)\n" +
-        "  Line 2: one sentence summarizing the catalyst with a date reference\n" +
-        "Separate items with a single blank line. No introduction. No conclusion. " +
-        "No price predictions. No bullet markers. No hashtag headers. " +
-        "No em dashes (—). Use periods or commas. Hard rule. " +
-        "Cite sources via [^N].",
-    },
+    { role: "system", content: system },
     {
       role: "user",
       content:
         `Solana token: ${symbol} (CA: ${ca}). What has driven price action in the last 24 hours? ` +
-        `List 3–5 concrete catalysts: announcements, integrations, influencer mentions, on-chain events. ` +
+        `List 3-5 concrete catalysts: announcements, integrations, influencer mentions, on-chain events. ` +
         `Each must be specific and verifiable.`,
     },
   ];

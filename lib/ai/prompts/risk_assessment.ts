@@ -1,29 +1,13 @@
 import type { RiskScore, TokenAnalysis } from "@/types/token";
 import { runClaude } from "@/lib/ai/claude";
+import { loadSystemPrompt } from "@/lib/ai/load-prompt";
 
-export const RISK_SYSTEM = `You assign risk scores to Solana tokens on a 0-100 scale where 0 is safest and 100 is highest risk. Return ONLY valid JSON in this exact shape, no other text:
-
-{
-  "score": <0-100 integer>,
-  "label": "SAFE | LOW | MODERATE | HIGH | EXTREME",
-  "factors": {
-    "liquidity": <0-100>,
-    "holders": <0-100>,
-    "authorities": <0-100>,
-    "age": <0-100>,
-    "volume_quality": <0-100>
-  },
-  "top_concern": "<one sentence stating the single biggest risk factor>"
-}
-
-Scoring guidance:
-- Liquidity: low LP USD value (under 25k) = 60+, very low or unlocked = 80+
-- Holders: top wallet >25% = 70+, top 10 >50% = 60+
-- Authorities: mint authority active = 90+, freeze authority active = 80+
-- Age: <24h = 60+, <1 week = 40+
-- Volume quality: 24h volume to liquidity ratio >10x = 70+ (wash trading signal)
-
-Map total score to label: 0-19 SAFE, 20-39 LOW, 40-59 MODERATE, 60-79 HIGH, 80-100 EXTREME.`;
+/**
+ * The risk-scoring system prompt lives in the env var
+ * `CLAUDE_SYSTEM_PROMPT_RISK_SCORE` and is loaded at call time.
+ * See lib/ai/load-prompt.ts for why prompts are out-of-source.
+ */
+const SYSTEM_PROMPT_KEY = "CLAUDE_SYSTEM_PROMPT_RISK_SCORE";
 
 export async function generateRiskScore(
   analysis: Pick<TokenAnalysis, "metadata" | "market" | "holders">,
@@ -37,11 +21,17 @@ export async function generateRiskScore(
     },
   };
 
-  // Heuristic baseline so we always have a score even if Claude fails.
+  // Heuristic baseline so we always have a score even if Claude fails
+  // OR if no system prompt is configured (open-source deploy without
+  // Anthropic creds). The baseline is computed in pure TypeScript from
+  // on-chain data so it works without any AI dependency.
   const baseline = computeHeuristicRisk(analysis);
 
+  const system = loadSystemPrompt(SYSTEM_PROMPT_KEY);
+  if (!system) return baseline;
+
   const text = await runClaude({
-    system: RISK_SYSTEM,
+    system,
     user: JSON.stringify(payload),
     maxTokens: 300,
     temperature: 0.1,
