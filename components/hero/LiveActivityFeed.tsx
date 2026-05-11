@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
+import { useWallet } from "@solana/wallet-adapter-react";
 import type { TrendingToken } from "@/types/token";
 import {
   deriveEvents,
@@ -40,6 +41,11 @@ export function LiveActivityFeed({
   /** Watch + smart-feed poll cadence. */
   refreshMs?: number;
 }) {
+  // Connected wallet (if any) drives the tracked-wallet poll. Disconnected
+  // → no tracked events are fetched or displayed.
+  const { publicKey } = useWallet();
+  const owner = publicKey?.toBase58() ?? null;
+
   // Rolling event queue. We cap it so memory doesn't unbound, but bigger
   // than the rotation window so the rotation has variety even on quiet
   // markets.
@@ -130,6 +136,43 @@ export function LiveActivityFeed({
       clearInterval(id);
     };
   }, []);
+
+  // Tracked-wallet poll. Active only when the user has a wallet
+  // connected. The server enforces a per-wallet 10-min cooldown — we
+  // poll the endpoint every 60s but the server only fires real Helius
+  // calls every 10 min. When tracked events come back, merge into the
+  // queue alongside the other event kinds.
+  //
+  // On disconnect (owner flips to null) we purge tracked-move events
+  // from the visible queue so the user doesn't see watchlist data
+  // they're no longer "logged into."
+  useEffect(() => {
+    if (!owner) {
+      setQueue((q) => q.filter((e) => e.kind !== "tracked-move"));
+      return;
+    }
+    let cancelled = false;
+    const refresh = async () => {
+      if (document.hidden) return;
+      try {
+        const r = await fetch(`/api/tracked/${owner}/poll`, {
+          cache: "no-store",
+        });
+        if (!r.ok) return;
+        const json = (await r.json()) as { events?: FeedEvent[] };
+        if (cancelled || !json.events || json.events.length === 0) return;
+        setQueue((q) => [...json.events!, ...q].slice(0, 60));
+      } catch {
+        /* upstash or rpc down — silently skip */
+      }
+    };
+    refresh();
+    const id = setInterval(refresh, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [owner]);
 
   // Diff trending + watch every time either changes.
   useEffect(() => {
@@ -269,15 +312,24 @@ function FeedRow({ ev }: { ev: FeedEvent }) {
 
   // Resolve the click target per event kind:
   //   smart-buy → /wallet/{kol_address} (the KOL's public wallet profile)
+  //   tracked-move → /wallet/{addr} (the tracked wallet's profile)
   //   anything else with a `ca` → /token/{ca}
   //   nothing else qualifies for a link
   let href: string | null = null;
   if (ev.kind === "smart-buy" && ev.kol_address) {
     href = `/wallet/${ev.kol_address}`;
+  } else if (ev.kind === "tracked-move") {
+    href = `/wallet/${ev.addr}`;
   } else if (ev.kind !== "smart-buy") {
     const ca = (ev as { ca?: string }).ca;
     if (ca) href = `/token/${ca}`;
   }
+
+  // Timestamp display: "12:34 UTC · 2m ago". The UTC part anchors the
+  // event to wall-clock time so users reading "smart money just moved"
+  // know exactly when. Relative part updates on each render.
+  const utcLabel = formatUtcShort(ev.ts);
+  const agoLabel = formatRelativeAgo(ev.ts);
 
   const Inner = (
     <motion.div
@@ -301,11 +353,19 @@ function FeedRow({ ev }: { ev: FeedEvent }) {
       <span className="text-[13px] text-text-primary font-semibold tracking-tight truncate">
         {text}
       </span>
+      {/* Timestamp: UTC + relative ago. Hides on the smallest screens so
+          the event text owns the row, expands on sm+. */}
+      <span
+        className="hidden sm:inline-flex shrink-0 ml-2 text-[10.5px] text-text-muted font-mono tabular-nums"
+        title={`${utcLabel} · ${agoLabel}`}
+      >
+        {utcLabel} · {agoLabel}
+      </span>
       {/* Trailing arrow hints "tap to go". Only on linkable events. */}
       {href && (
         <span
           aria-hidden
-          className="ml-auto pl-2 text-[12px] text-text-muted shrink-0 hidden sm:inline-flex"
+          className="pl-2 text-[12px] shrink-0 hidden sm:inline-flex"
           style={{ color: accent.color, opacity: 0.7 }}
         >
           →
@@ -332,4 +392,22 @@ function FeedRow({ ev }: { ev: FeedEvent }) {
     );
   }
   return Inner;
+}
+
+/** HH:MM UTC — short clock format pinned to UTC so it reads the same
+ *  for every viewer regardless of timezone. */
+function formatUtcShort(ts: number): string {
+  const d = new Date(ts);
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${hh}:${mm} UTC`;
+}
+
+/** Relative "x ago" — seconds for <1min, minutes for <1h, hours otherwise. */
+function formatRelativeAgo(ts: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
 }

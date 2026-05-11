@@ -70,6 +70,18 @@ export type FeedEvent =
        *  contents — wired for the future enhancement. */
       ca?: string;
       ts: number;
+    }
+  | {
+      kind: "tracked-move"; // user-tracked wallet just signed something
+      label: string;
+      addr: string;
+      /** Latest signature observed in the diff. Used as the Solscan
+       *  click target for the row. */
+      sig: string;
+      /** Count of new signatures since last poll (collapsed into one
+       *  surface event with this count). */
+      txCount: number;
+      ts: number;
     };
 
 const MCAP_MILESTONES = [
@@ -258,6 +270,8 @@ export function formatEvent(ev: FeedEvent): string {
       return `$${ev.symbol} firing · $${humanMcap(ev.volume1h)} vol in 1h · ${ev.ageHours?.toFixed(0)}h old`;
     case "smart-buy":
       return `Smart money (${ev.kol}) just moved${ev.ca ? "" : ""}`;
+    case "tracked-move":
+      return `${ev.label} just moved${ev.txCount > 1 ? ` · ${ev.txCount} txns` : ""}`;
   }
 }
 
@@ -288,5 +302,7 @@ export function eventAccent(ev: FeedEvent): {
       return { color: "#FFB938", glow: "rgba(255, 185, 56, 0.45)", emoji: "🎯", label: "SNIPER" };
     case "smart-buy":
       return { color: "#FF2D9C", glow: "rgba(255, 45, 156, 0.45)", emoji: "🧠", label: "SMART" };
+    case "tracked-move":
+      return { color: "#FFB938", glow: "rgba(255, 185, 56, 0.45)", emoji: "★", label: "TRACKED" };
   }
 }

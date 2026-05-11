@@ -14,6 +14,7 @@ import { TopNav } from "@/components/shared/TopNav";
 import { Aurora } from "@/components/shared/Aurora";
 import { CursorBlob } from "@/components/shared/CursorBlob";
 import { WalletProfileHero } from "@/components/wallet-profile/WalletProfileHero";
+import { TrackedWalletsList } from "@/components/wallet-profile/TrackedWalletsList";
 import { PortfolioDonut } from "@/components/wallet-profile/PortfolioDonut";
 import { WalletActivityCalendar } from "@/components/wallet-profile/WalletActivityCalendar";
 import { WalletHoldings } from "@/components/wallet-profile/WalletHoldings";
@@ -99,6 +100,9 @@ export default async function WalletProfilePage({ params }: PageProps) {
         </Link>
 
         <WalletProfileHero identity={profile.identity} />
+
+        {/* Tracked wallets management — self-gates render to own profile only. */}
+        <TrackedWalletsList profileAddress={address} />
 
         {/* Portfolio + Activity heatmap side by side on desktop, stack on mobile. */}
         <div className="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-4 lg:gap-5">

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { animate } from "animejs";
 import type { WalletBadge, WalletIdentity } from "@/lib/data/wallet";
 import { humanizeNumber, shortAddress } from "@/lib/utils";
+import { TrackButton } from "./TrackButton";
 
 /**
  * Wallet profile hero. The "above the fold" identity surface:
@@ -108,6 +109,7 @@ export function WalletProfileHero({
             >
               Solscan ↗
             </a>
+            <TrackButton profileAddress={identity.address} />
           </div>
 
           {/* Badges */}
