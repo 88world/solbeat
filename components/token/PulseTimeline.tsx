@@ -22,15 +22,20 @@ type Props = {
  * "now" reading floats to the right with the current verdict in big type.
  */
 export function PulseTimeline({ snapshots }: Props) {
-  if (snapshots.length === 0) return null;
-
-  // Snapshots arrive newest-first; chart wants oldest-first for left-to-right.
+  // Hooks must run on every render in the same order. The early return
+  // for the empty-snapshots case lived ABOVE these useMemos — when
+  // snapshots flipped from empty to non-empty on a token switch, React
+  // saw two new hooks appear out of nowhere and the hook-order
+  // contract broke. Moved the bail-out below the hooks; both useMemos
+  // are cheap on an empty array so paying the cost is fine.
   const data = useMemo(
     () => [...snapshots].sort((a, b) => a.ts - b.ts),
     [snapshots],
   );
-  const latest = snapshots[0];
   const inflections = useMemo(() => detectInflections(snapshots), [snapshots]);
+
+  if (snapshots.length === 0) return null;
+  const latest = snapshots[0];
 
   return (
     <div className="glass rounded-2xl p-5 sm:p-6">
@@ -355,9 +360,18 @@ function HoverCard({ snap }: { snap: PulseSnapshot }) {
 }
 
 function PreviousReadings({ data }: { data: PulseSnapshot[] }) {
-  // Show two anchor readings for context: "1h ago" and "24h ago" (or whatever
-  // is actually present). We pick the closest snapshot to those targets.
-  const now = Date.now();
+  // Show two anchor readings for context: "1h ago" and "24h ago" (or
+  // whatever is actually present). We pick the closest snapshot to
+  // those targets.
+  //
+  // Reference time = the latest snapshot's timestamp (data is sorted
+  // oldest-first by the caller, so [-1] is freshest). Using Date.now()
+  // during render is impure and creates SSR-hydration mismatch
+  // potential; anchoring to the freshest reading is the right semantic
+  // anyway ("1h ago vs the most recent pulse" reads the same as
+  // "1h ago vs wall clock" since the pulse refreshes every poll).
+  if (data.length === 0) return null;
+  const now = data[data.length - 1].ts;
   const want = [
     { label: "1h ago", target: now - 3_600_000 },
     { label: "6h ago", target: now - 6 * 3_600_000 },

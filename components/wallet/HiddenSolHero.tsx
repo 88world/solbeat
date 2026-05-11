@@ -172,7 +172,7 @@ export function HiddenSolHero({
               {scan.account_count}
             </span>{" "}
             empty token account{scan.account_count === 1 ? "" : "s"} sitting
-            on rent that's yours to take back. We clip{" "}
+            on rent that&apos;s yours to take back. We clip{" "}
             {(scan.fee_bps / 100).toFixed(0)}% only if you reclaim.
           </div>
         </div>

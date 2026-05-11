@@ -28,7 +28,10 @@ export function BondingCurveCard({ ca }: Props) {
   const [data, setData] = useState<BondingCurveSnapshot | null>(null);
   const [error, setError] = useState(false);
   const [secondsAgo, setSecondsAgo] = useState(0);
-  const [lastTick, setLastTick] = useState(Date.now());
+  // Lazy initializer — `Date.now()` is impure in render, but inside
+  // the `() => …` form it only fires once on mount, which is what we
+  // want for "when did the last tick happen?".
+  const [lastTick, setLastTick] = useState(() => Date.now());
   const numberRef = useRef<HTMLSpanElement>(null);
   const lastDisplayedRef = useRef(0);
 
