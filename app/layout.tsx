@@ -41,9 +41,20 @@ export const metadata: Metadata = {
     title: "SolBeat, The pulse of every Solana token",
     description: "Paste any CA. Read the pulse.",
   },
+  // Full BV-branded favicon set: SVG mark for modern browsers (crisp at
+  // any zoom + theme-aware), .ico fallback for legacy, 96x96 PNG for
+  // bookmark thumbnails, Apple touch icon for iOS home-screen, and the
+  // 192/512 maskable PWA icons referenced from site.webmanifest.
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
+      { url: "/favicon.ico" },
+    ],
+    shortcut: ["/favicon.ico"],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
+  manifest: "/site.webmanifest",
 };
 
 export const viewport: Viewport = {
