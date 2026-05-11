@@ -69,7 +69,16 @@ export default function Home() {
         </ScrollReveal>
       </main>
       <footer className="px-6 pb-5 pt-2 text-center text-[11px] text-text-muted">
-        Built by Block Valley Labs · Solana Frontier Hackathon
+        Built by{" "}
+        <a
+          href="https://blockvalley.io"
+          target="_blank"
+          rel="noreferrer"
+          className="underline decoration-text-muted/40 underline-offset-2 hover:text-text-secondary hover:decoration-accent-pulse/60 transition"
+        >
+          Block Valley Labs
+        </a>{" "}
+        · Solana Frontier Hackathon
       </footer>
     </div>
   );

@@ -116,7 +116,7 @@ The data flow for a single token analysis:
 ### Setup
 
 ```bash
-git clone https://github.com/blockvalley/solbeat.git
+git clone https://github.com/88world/solbeat.git
 cd solbeat
 npm install
 cp .env.example .env.local

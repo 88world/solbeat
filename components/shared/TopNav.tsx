@@ -52,7 +52,7 @@ export function TopNav() {
             />
           </Link>
           <a
-            href="https://github.com/blockvalley/solbeat"
+            href="https://github.com/88world/solbeat"
             target="_blank"
             rel="noreferrer"
             className="relative hover:text-text-primary transition group"
