@@ -1,6 +1,7 @@
 import type { TokenHolders, TokenMetadata } from "@/types/token";
-import { LIMITS } from "@/config/constants";
+import { LIMITS, TTL } from "@/config/constants";
 import { classifyOwner } from "@/lib/solana/classifier";
+import { cached } from "@/lib/cache/redis";
 
 const HELIUS_KEY = process.env.HELIUS_API_KEY;
 const HELIUS_RPC = HELIUS_KEY
@@ -103,7 +104,20 @@ export async function getMintAccount(mint: string): Promise<{
   };
 }
 
+/**
+ * Cached by mint at TTL.TOKEN_METADATA_S (24h). Token metadata —
+ * name, supply, decimals, authorities, image — is effectively
+ * immutable after deploy. Authority transitions are rare events the
+ * next daily refresh will catch. Caching for 24h saves Helius DAS
+ * credits on every repeat visit to an established token.
+ */
 export async function getAsset(mint: string): Promise<TokenMetadata | null> {
+  return cached(`metadata:${mint}`, TTL.TOKEN_METADATA_S, () =>
+    getAssetUncached(mint),
+  );
+}
+
+async function getAssetUncached(mint: string): Promise<TokenMetadata | null> {
   const result = await rpc<DasAsset>("getAsset", { id: mint });
   if (!result) return null;
 

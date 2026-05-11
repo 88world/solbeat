@@ -1,5 +1,6 @@
 import type { TweetSnippet } from "@/types/token";
-import { LIMITS } from "@/config/constants";
+import { LIMITS, TTL } from "@/config/constants";
+import { cached } from "@/lib/cache/redis";
 
 const KEY = process.env.TWITTERAPI_IO_KEY ?? "";
 
@@ -33,7 +34,22 @@ type TwApiResponse = {
   }>;
 };
 
+/**
+ * Cached by CA at TTL.TWEETS_S (30min). Social sentiment can shift in
+ * hours but rarely in 30min, and twitterapi.io credits are non-free.
+ * The 30min window is the safe middle ground for the AI synthesis to
+ * still read "recent" without burning credits on every visitor.
+ */
 export async function fetchRecentTweets(
+  symbol: string,
+  ca: string,
+): Promise<TweetSnippet[]> {
+  return cached(`tweets:${ca}`, TTL.TWEETS_S, () =>
+    fetchRecentTweetsUncached(symbol, ca),
+  );
+}
+
+async function fetchRecentTweetsUncached(
   symbol: string,
   ca: string,
 ): Promise<TweetSnippet[]> {

@@ -1,6 +1,8 @@
 import type { RiskScore, TokenAnalysis } from "@/types/token";
 import { runClaude } from "@/lib/ai/claude";
 import { loadSystemPrompt } from "@/lib/ai/load-prompt";
+import { cached } from "@/lib/cache/redis";
+import { TTL } from "@/config/constants";
 
 /**
  * The risk-scoring system prompt lives in the env var
@@ -9,7 +11,21 @@ import { loadSystemPrompt } from "@/lib/ai/load-prompt";
  */
 const SYSTEM_PROMPT_KEY = "CLAUDE_SYSTEM_PROMPT_RISK_SCORE";
 
+/**
+ * Cached by CA at TTL.RISK_SCORE_S (6h). On-chain risk factors
+ * (liquidity, holder concentration, authorities, age) change slowly —
+ * a token's risk profile doesn't pivot on hourly market moves. Caching
+ * for 6h is conservative and saves a Claude call on every repeat visit.
+ */
 export async function generateRiskScore(
+  analysis: Pick<TokenAnalysis, "metadata" | "market" | "holders">,
+): Promise<RiskScore | null> {
+  return cached(`risk:${analysis.metadata.ca}`, TTL.RISK_SCORE_S, () =>
+    generateRiskScoreUncached(analysis),
+  );
+}
+
+async function generateRiskScoreUncached(
   analysis: Pick<TokenAnalysis, "metadata" | "market" | "holders">,
 ): Promise<RiskScore | null> {
   const payload = {

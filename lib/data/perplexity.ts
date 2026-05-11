@@ -1,6 +1,7 @@
 import type { CatalystItem } from "@/types/token";
-import { LIMITS } from "@/config/constants";
+import { LIMITS, TTL } from "@/config/constants";
 import { loadSystemPrompt } from "@/lib/ai/load-prompt";
+import { cached } from "@/lib/cache/redis";
 
 const PPLX_KEY = process.env.PERPLEXITY_API_KEY ?? "";
 
@@ -31,7 +32,21 @@ type PplxResponse = {
  *   - resolve source labels from the citation hostname (never expose the
  *     research vendor's name)
  */
+/**
+ * Cached by CA at TTL.CATALYSTS_S (1h). Catalysts are 24h-window summaries,
+ * so caching the same answer for an hour keeps the data within the source
+ * window's validity. Saves Perplexity API credits on every repeat visit.
+ */
 export async function fetchCatalysts(
+  symbol: string,
+  ca: string,
+): Promise<CatalystItem[]> {
+  return cached(`catalysts:${ca}`, TTL.CATALYSTS_S, () =>
+    fetchCatalystsUncached(symbol, ca),
+  );
+}
+
+async function fetchCatalystsUncached(
   symbol: string,
   ca: string,
 ): Promise<CatalystItem[]> {

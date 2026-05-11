@@ -1,8 +1,28 @@
+// Cache TTLs tiered by how fast each data type actually changes. Set
+// post-Upstash wiring — higher TTLs only make sense once we have a
+// persistent cross-instance cache (the in-memory fallback resets per
+// Vercel instance so longer TTLs just delay the inevitable cold miss).
 export const TTL = {
-  TOKEN_METADATA_S: 3600,
+  // Metadata: name, supply, decimals, mint/freeze authorities. Effectively
+  // immutable after token deploy — even authority transitions are rare
+  // and would surface on next daily refresh.
+  TOKEN_METADATA_S: 86_400, // 24h (was 1h)
+  // Live spot data. Not actually used by anything; live polls handle this.
   TOKEN_PRICE_S: 30,
-  HOLDERS_S: 300,
-  AI_SYNTHESIS_S: 600,
+  // Holder snapshot. Slow turnover — top-20 list shifts over hours.
+  HOLDERS_S: 300, // 5min
+  // AI synthesis prose. Mentions "recent" moves; 2h keeps it honest.
+  AI_SYNTHESIS_S: 7_200, // 2h (was 10min)
+  // Risk score. Derived from on-chain factors that change slowly
+  // (liquidity, holder concentration, authorities, age). 6h is fine.
+  RISK_SCORE_S: 21_600, // 6h
+  // Catalysts. Perplexity reports a 24h window — caching the same answer
+  // for 1h still leaves 23h of validity within that window.
+  CATALYSTS_S: 3_600, // 1h
+  // Recent tweets. Social sentiment can shift in hours; 30min strikes the
+  // balance between freshness and burning twitterapi.io credits.
+  TWEETS_S: 1_800, // 30min
+  // Trending list refresh on homepage (no AI involved, just DexScreener).
   TRENDING_S: 15,
 } as const;
 
