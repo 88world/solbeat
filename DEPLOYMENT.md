@@ -42,7 +42,7 @@ NEXT_PUBLIC_SOLANA_RPC=https://mainnet.helius-rpc.com/?api-key=secret123
 
 …then `secret123` is now in your browser bundle. Anyone who opens DevTools can lift it and use it from any domain.
 
-**Fix:** in Helius's dashboard, set "Allowed Origins" to your domain (`solbeat.xyz`). The key still leaks visually, but it can only be used from your origin. Also rotate it periodically.
+**Fix:** in Helius's dashboard, set "Allowed Origins" to your domain (`solbeat.blockvalley.io`). The key still leaks visually, but it can only be used from your origin. Also rotate it periodically.
 
 For the chain-side server calls (`/api/analyze`, `/api/reclaim/*`), use the server-only `HELIUS_API_KEY` — it's used inside the Node.js process and never touches the browser.
 
