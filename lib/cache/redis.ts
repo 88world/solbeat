@@ -54,6 +54,13 @@ export async function cached<T>(
   const hit = await cacheGet<T>(key);
   if (hit !== null && hit !== undefined) return hit;
   const fresh = await loader();
-  await cacheSet(key, fresh, ttlSeconds);
+  // Don't store null/undefined results. We were poisoning the cache when
+  // an upstream call failed (e.g., Claude returning null from a 400 on
+  // prompt-caching invalid) — that null then served for the full TTL,
+  // blocking recovery even after the upstream issue was resolved. Errors
+  // should let the next visitor retry, not get cached for hours.
+  if (fresh !== null && fresh !== undefined) {
+    await cacheSet(key, fresh, ttlSeconds);
+  }
   return fresh;
 }

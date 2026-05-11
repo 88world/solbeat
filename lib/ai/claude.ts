@@ -42,10 +42,16 @@ export const SOLBEAT_MODEL = "claude-haiku-4-5-20251001";
  * Run a single non-streaming Claude call. Returns raw text or null on failure.
  * Caller is responsible for prompts and parsing.
  *
- * Prompt caching is on by default — the system prompt is wrapped with
- * `cache_control: ephemeral` so repeated calls within ~5 min get 90% off
- * the cached portion. Combined with the Haiku rate this should drop the
- * input bill ~85% on a typical hour of token-page traffic.
+ * Earlier this wrapper used the structured `system: [{ type, text,
+ * cache_control: { type: "ephemeral" } }]` form to opt into Anthropic
+ * prompt caching. That broke synthesis on Haiku 4.5 — the cached block
+ * must meet a minimum-token threshold the SolBeat prompts (~225-460
+ * tokens) don't reach, and Anthropic returns a 400 cache_control_invalid
+ * error that this wrapper's catch block was swallowing. Reverted to a
+ * plain string system param. The Haiku rate alone (4x cheaper than
+ * Sonnet) + Upstash caching on the orchestrator (2-24h TTLs) carries
+ * the cost reduction; we can revisit prompt caching once the system
+ * prompts grow past the minimum threshold.
  */
 export async function runClaude(opts: {
   system: string;
@@ -74,20 +80,7 @@ export async function runClaude(opts: {
       model: opts.model ?? SOLBEAT_MODEL,
       max_tokens: opts.maxTokens ?? 1024,
       temperature: opts.temperature ?? 0.3,
-      // System prompt as a structured TextBlockParam with cache_control
-      // so Anthropic caches it across calls. The first call within a
-      // 5-min window pays a 25% write-premium on the cached portion;
-      // every subsequent call pays 10% of the normal input rate for
-      // those tokens. For SolBeat, the synthesis + risk system prompts
-      // are stable, so the cache hit rate should be near-100% on warm
-      // production traffic.
-      system: [
-        {
-          type: "text",
-          text: opts.system,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
+      system: opts.system,
       messages: [{ role: "user", content: opts.user }],
     });
     const block = msg.content.find((b) => b.type === "text");
