@@ -31,6 +31,8 @@ export function TokensToWatch() {
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
+      // Background-tab gate.
+      if (document.hidden) return;
       try {
         const r = await fetch("/api/watch", { cache: "no-store" });
         if (!r.ok) return;

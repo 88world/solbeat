@@ -59,7 +59,8 @@ export function ECGTrace({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const dpr = Math.min(window.devicePixelRatio, 2);
+    // DPR clamped to 1.5 — same rationale as the other canvases.
+    const dpr = Math.min(window.devicePixelRatio, 1.5);
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     ctx.scale(dpr, dpr);

@@ -32,12 +32,18 @@ export function BondingCurveCard({ ca }: Props) {
   // the `() => …` form it only fires once on mount, which is what we
   // want for "when did the last tick happen?".
   const [lastTick, setLastTick] = useState(() => Date.now());
+  // Hover-aware cadence: 20s when idle, 12s when the user is actively
+  // looking at the curve. Active inspection gets fresher data without
+  // burning CPU + RPC for every visitor leaving the page idle.
+  const [hovered, setHovered] = useState(false);
   const numberRef = useRef<HTMLSpanElement>(null);
   const lastDisplayedRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
+      // Background-tab gate.
+      if (document.hidden) return;
       try {
         const r = await fetch(`/api/token/${ca}/pump`, { cache: "no-store" });
         if (!r.ok) {
@@ -56,12 +62,13 @@ export function BondingCurveCard({ ca }: Props) {
       }
     };
     refresh();
-    const id = setInterval(refresh, 12_000);
+    const cadence = hovered ? 12_000 : 20_000;
+    const id = setInterval(refresh, cadence);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [ca]);
+  }, [ca, hovered]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -147,6 +154,8 @@ export function BondingCurveCard({ ca }: Props) {
   return (
     <div
       className="rounded-2xl px-5 py-4 mb-5 relative overflow-hidden"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         background: tier.bg,
         border: `1px solid ${tier.border}`,

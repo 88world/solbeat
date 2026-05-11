@@ -35,6 +35,9 @@ export function EcosystemStrip() {
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
+      // Background-tab gate — /api/ecosystem hits 4 upstreams and is
+      // expensive cold. Skip when the user isn't looking.
+      if (document.hidden) return;
       try {
         const r = await fetch("/api/ecosystem", { cache: "no-store" });
         if (!r.ok) return;

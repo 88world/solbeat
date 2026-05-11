@@ -52,11 +52,12 @@ export function LiveFlow({ tokens, size = 380, heat = 0.2 }: Props) {
     camera.position.z = 1;
 
     // Particle pool. Pre-allocate to avoid GC churn during high flow.
-    // Lowered 1200 → 600 after a perf review, mid-tier laptops were
-    // dropping frames around the high-flow tail. The visual fidelity
-    // doesn't change at this density because additive blending saturates
-    // the lanes around 60-80 alive particles anyway.
-    const MAX_PARTICLES = 600;
+    // Lowered 1200 → 600 → 400 after successive perf passes. The
+    // additive-blend saturation point is around 60-80 alive particles
+    // per lane, so dropping the ceiling further has no visible impact
+    // on the busiest scenes. 33% less GPU + CPU for laptops watching
+    // the page idle in a tab.
+    const MAX_PARTICLES = 400;
     const positions = new Float32Array(MAX_PARTICLES * 3);
     const colors = new Float32Array(MAX_PARTICLES * 3);
     const sizes = new Float32Array(MAX_PARTICLES);

@@ -69,7 +69,9 @@ export function HeartWave({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const dpr = Math.min(window.devicePixelRatio, 2);
+    // DPR clamped to 1.5 — halves rendered pixels on Retina with
+    // imperceptible quality drop on a thick-line waveform.
+    const dpr = Math.min(window.devicePixelRatio, 1.5);
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     ctx.scale(dpr, dpr);

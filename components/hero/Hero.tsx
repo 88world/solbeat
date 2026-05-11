@@ -73,6 +73,10 @@ export function Hero() {
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
+      // Skip the poll when the tab is backgrounded. Browser keeps timers
+      // firing in inactive tabs, which would otherwise hit /api/trending
+      // every 8s while the user is in another tab — wasted CPU + network.
+      if (document.hidden) return;
       try {
         const r = await fetch("/api/trending", { cache: "no-store" });
         if (!r.ok) return;

@@ -60,12 +60,18 @@ export function BuySellPressure({ analysis }: Props) {
     "24h": [],
   });
   const [historyTick, setHistoryTick] = useState(0);
+  // Hover-aware cadence: 15s when idle, 8s when the user is actively
+  // looking at the pressure bar. The card is the noisiest poller on
+  // the page (most data points per minute); slowing it when the user
+  // isn't on it is a big idle-CPU win.
+  const [hovered, setHovered] = useState(false);
 
-  // Poll the quick endpoint on the same 8s cadence as the rest of the page.
   useEffect(() => {
     if (!analysis.metadata.ca) return;
     let cancelled = false;
     const refresh = async () => {
+      // Background-tab gate.
+      if (document.hidden) return;
       try {
         const r = await fetch(`/api/token/${analysis.metadata.ca}/quick`, {
           cache: "no-store",
@@ -87,12 +93,13 @@ export function BuySellPressure({ analysis }: Props) {
         /* noop */
       }
     };
-    const id = setInterval(refresh, 8_000);
+    const cadence = hovered ? 8_000 : 15_000;
+    const id = setInterval(refresh, cadence);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [analysis.metadata.ca]);
+  }, [analysis.metadata.ca, hovered]);
 
   const m: LiveMarket = live ?? analysis.market;
 
@@ -127,7 +134,11 @@ export function BuySellPressure({ analysis }: Props) {
   }
 
   return (
-    <div className="glass rounded-2xl p-5 sm:p-6 h-full flex flex-col">
+    <div
+      className="glass rounded-2xl p-5 sm:p-6 h-full flex flex-col"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <Header tab={tab} setTab={setTab} hasData />
 
       <Verdict

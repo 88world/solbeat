@@ -34,6 +34,9 @@ export function PriceCard({ analysis }: { analysis: TokenAnalysis }) {
     if (!analysis.metadata.ca) return;
     let cancelled = false;
     const refresh = async () => {
+      // Background-tab gate — don't fetch live price + flash animation
+      // when the user has the page in a hidden tab.
+      if (document.hidden) return;
       try {
         const r = await fetch(`/api/token/${analysis.metadata.ca}/quick`, {
           cache: "no-store",

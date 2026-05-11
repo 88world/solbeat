@@ -58,6 +58,8 @@ export function LiveActivityFeed({
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
+      // Background-tab gate — skip the watch poll when not visible.
+      if (document.hidden) return;
       try {
         const r = await fetch("/api/watch", { cache: "no-store" });
         if (!r.ok) return;
@@ -88,6 +90,8 @@ export function LiveActivityFeed({
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
+      // Background-tab gate — skip the smart-feed poll when not visible.
+      if (document.hidden) return;
       try {
         const r = await fetch("/api/smart-feed", { cache: "no-store" });
         if (!r.ok) return;
