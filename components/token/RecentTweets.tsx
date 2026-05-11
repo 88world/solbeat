@@ -1,29 +1,140 @@
 "use client";
 
+import { useState } from "react";
 import type { TweetSnippet } from "@/types/token";
 import { humanizeNumber } from "@/lib/utils";
 
 /**
- * Tweet feed styled like real X embeds. Each card shows:
- *   - gradient avatar (we don't have profile pics, first letter on a brand
- *     gradient is the Twitter-card fallback look)
- *   - bold @handle + verified-style check if follower count >100k
- *   - relative time
- *   - cleaned tweet text (URLs and entities stripped to readable form)
- *   - engagement bar (replies / retweets / likes if available, total otherwise)
- *   - hover glow + click → original tweet on X
+ * Module-level session cache so re-mounting RecentTweets within the same
+ * browser-tab session doesn't re-hit /api/token/[ca]/tweets. A full
+ * page reload clears the cache — which is the right reset semantics
+ * (fresh navigation = fresh data permission).
  */
-export function RecentTweets({ tweets }: { tweets: TweetSnippet[] }) {
-  if (tweets.length === 0) {
-    return null;
+const sessionCache = new Map<string, TweetSnippet[]>();
+
+type Props = { symbol: string; ca: string };
+
+/**
+ * Tweet feed for the token page's Social Signal section.
+ *
+ * Lazy-loaded: renders an empty state with a "View tweets" CTA on mount.
+ * The twitterapi.io fetch fires only after the user opts in by clicking
+ * the button. This is purely a display optimization — the AI synthesis
+ * pipeline (analyzeSlow) still fetches tweets server-side for Claude
+ * context, hitting the same Upstash-cached `tweets:{ca}` key as this
+ * client fetch. So overall twitterapi.io credit consumption is bounded
+ * to one call per CA per 30min cache window regardless of who clicks.
+ *
+ * What lazy-load actually buys:
+ *   - Initial HTML payload doesn't include the tweet body data (smaller
+ *     render, faster paint)
+ *   - "Opt-in to social" UX feels more intentional than auto-revealed
+ *     blue-check signal
+ */
+export function RecentTweets({ symbol, ca }: Props) {
+  // Hydrate from session cache if we've already loaded these in-tab.
+  const cached = sessionCache.get(ca);
+  const [tweets, setTweets] = useState<TweetSnippet[] | null>(cached ?? null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const cleanSymbol = symbol.replace(/^\$/, "").toUpperCase();
+
+  const loadTweets = async () => {
+    if (tweets) return; // already have data, no-op
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch(
+        `/api/token/${ca}/tweets?symbol=${encodeURIComponent(cleanSymbol)}`,
+        { cache: "no-store" },
+      );
+      if (!r.ok) throw new Error(`status ${r.status}`);
+      const json = (await r.json()) as { tweets?: TweetSnippet[] };
+      const fetched = json.tweets ?? [];
+      sessionCache.set(ca, fetched);
+      setTweets(fetched);
+    } catch (err) {
+      console.error("[recent-tweets] fetch failed", err);
+      setError("Couldn't load tweets right now. Try again in a moment.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Empty state (default mount) ──
+  if (tweets === null && !loading) {
+    return (
+      <div className="glass rounded-2xl p-5 sm:p-6">
+        <Header symbol={cleanSymbol} state="idle" />
+        <div className="flex flex-col items-start gap-3 mt-2">
+          <button
+            type="button"
+            onClick={loadTweets}
+            className="group inline-flex items-center gap-2 px-4 h-9 rounded-full text-[12px] font-bold text-text-primary transition-all hover:scale-[1.02] active:scale-[0.97]"
+            style={{
+              background: "var(--glass-soft)",
+              border: "1px solid var(--border-subtle)",
+              boxShadow: "inset 0 0 0 1px var(--border-subtle)",
+            }}
+          >
+            <span>View tweets</span>
+            <span
+              aria-hidden
+              className="text-[13px] text-text-muted transition-transform group-hover:translate-x-0.5"
+            >
+              →
+            </span>
+          </button>
+          {error && (
+            <p className="text-[11px] text-signal-negative">{error}</p>
+          )}
+        </div>
+      </div>
+    );
   }
+
+  // ── Loading state ──
+  if (loading) {
+    return (
+      <div className="glass rounded-2xl p-5 sm:p-6">
+        <Header symbol={cleanSymbol} state="loading" />
+        <ul className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <li
+              key={i}
+              className="rounded-xl h-[100px] animate-shimmer"
+              style={{
+                background: "var(--glass-soft)",
+                border: "1px solid var(--border-subtle)",
+              }}
+            />
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  // ── Loaded state (tweets is non-null array) ──
+  const list = tweets ?? [];
+  if (list.length === 0) {
+    return (
+      <div className="glass rounded-2xl p-5 sm:p-6">
+        <Header symbol={cleanSymbol} state="empty" />
+        <p className="text-[12px] text-text-muted mt-2">
+          No recent posts found for ${cleanSymbol}. The X-side is quiet.
+        </p>
+      </div>
+    );
+  }
+
   // Two-tier sort: verified / >100K-follower accounts first, then by
   // engagement within each tier. A blue-check with 80 likes is more
   // signal than an anonymous account with 800 likes, so the tier ranking
   // dominates the engagement count.
   const tier = (t: TweetSnippet): number =>
     t.verified || t.followers > 100_000 ? 1 : 0;
-  const top = [...tweets]
+  const top = [...list]
     .sort((a, b) => {
       const tierDiff = tier(b) - tier(a);
       if (tierDiff !== 0) return tierDiff;
@@ -31,9 +142,8 @@ export function RecentTweets({ tweets }: { tweets: TweetSnippet[] }) {
     })
     .slice(0, 6);
 
-  // Aggregate stats for the header.
-  const totalEngagement = tweets.reduce((acc, t) => acc + t.engagement, 0);
-  const verifiedCount = tweets.filter(
+  const totalEngagement = list.reduce((acc, t) => acc + t.engagement, 0);
+  const verifiedCount = list.filter(
     (t) => t.verified || t.followers > 100_000,
   ).length;
 
@@ -45,7 +155,7 @@ export function RecentTweets({ tweets }: { tweets: TweetSnippet[] }) {
             Social signal
           </h3>
           <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
-            {tweets.length} posts ·{" "}
+            {list.length} posts ·{" "}
             <span className="text-mono">
               {humanizeNumber(totalEngagement)}
             </span>{" "}
@@ -64,6 +174,37 @@ export function RecentTweets({ tweets }: { tweets: TweetSnippet[] }) {
           <TweetCard key={i} tweet={t} />
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Header for the idle / loading / empty states. Keeps "Social signal"
+ * branding consistent across all three so the user sees the same panel
+ * shell before + after expansion.
+ */
+function Header({
+  symbol,
+  state,
+}: {
+  symbol: string;
+  state: "idle" | "loading" | "empty";
+}) {
+  return (
+    <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
+      <div>
+        <h3 className="text-[14px] font-bold tracking-tight text-text-primary leading-tight">
+          Social signal
+        </h3>
+        <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
+          {state === "loading"
+            ? `Pulling recent X posts about $${symbol}…`
+            : `Recent X posts about $${symbol} · KOLs first`}
+        </p>
+      </div>
+      <span className="text-[9.5px] uppercase tracking-[0.20em] text-text-muted font-bold">
+        {state === "loading" ? "loading" : "click to load"}
+      </span>
     </div>
   );
 }

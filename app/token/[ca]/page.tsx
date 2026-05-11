@@ -365,8 +365,19 @@ async function CatalystSlow({
 }
 
 async function TweetsSlow({ ca, fast }: { ca: string; fast: FastAnalysis }) {
-  const slow = await analyzeSlow(ca, fast);
-  return <RecentTweets tweets={slow.tweets} />;
+  // We no longer pass tweets through to the display — the social panel
+  // is lazy-loaded client-side (RecentTweets fetches via /api/token/[ca]/tweets
+  // when the user clicks "View tweets"). analyzeSlow still runs server-side
+  // and feeds tweets to Claude for the "what's happening" synthesis
+  // paragraph; we just don't ship them in the initial HTML payload.
+  //
+  // This async wrapper is preserved so the Suspense boundary still gates
+  // the social panel render until analyzeSlow completes — that way the
+  // panel doesn't appear above the AI synthesis cell, which would feel
+  // out-of-order. The empty-state CTA shows up after the slow path lands.
+  await analyzeSlow(ca, fast);
+  const symbol = fast.metadata.symbol ?? ca.slice(0, 6);
+  return <RecentTweets symbol={symbol} ca={ca} />;
 }
 
 /**
