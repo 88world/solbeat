@@ -25,6 +25,7 @@ import { CaPasteBox } from "./CaPasteBox";
 import { MarketPulse } from "./MarketPulse";
 import { LiveChart } from "./LiveChart";
 import { TickerTape } from "./TickerTape";
+import { LiveActivityFeed } from "./LiveActivityFeed";
 import {
   computeHeatSnapshot,
   heatToBpm,
@@ -201,8 +202,9 @@ export function Hero() {
           </div>
         </div>
 
-        {/* BOTTOM, live chart + scrolling ticker */}
+        {/* BOTTOM, live activity feed + live chart + scrolling ticker */}
         <div data-fade-up className="hidden lg:block space-y-3">
+          <LiveActivityFeed trending={tokens} />
           <LiveChart tokens={tokens} limit={5} />
           <TickerTape tokens={tokens} heat={heat} />
         </div>
@@ -213,6 +215,7 @@ export function Hero() {
           data-fade-up
         >
           <MarketPulse pulse={snapshot} />
+          <LiveActivityFeed trending={tokens} />
           <LiveChart tokens={tokens} limit={5} />
           <TickerTape tokens={tokens} heat={heat} />
           <TrendingList limit={4} heat={heat} tokens={tokens} />

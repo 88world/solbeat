@@ -7,6 +7,7 @@ import { PortfolioGrid, type HeldToken } from "./PortfolioGrid";
 import { ReclaimPanel } from "./ReclaimPanel";
 import { WalletSignalPanel } from "./WalletSignalPanel";
 import { HiddenSolHero } from "./HiddenSolHero";
+import { WalletIntelPanel } from "./WalletIntelPanel";
 import { cn, shortAddress } from "@/lib/utils";
 
 type Tab = "portfolio" | "reclaim";
@@ -98,6 +99,12 @@ export function WalletPulseClient() {
         address={publicKey.toBase58()}
         onJump={() => setTab("reclaim")}
       />
+
+      {/* Wallet intel: aggregate risk + top flagged + smart-money overlap.
+          The "second brain" view — the differentiator that makes Wallet
+          Pulse a tool, not just a viewer. Fetches /api/wallet/{addr}/intel
+          which is server-cached for 20s. */}
+      <WalletIntelPanel address={publicKey.toBase58()} />
 
       {!loading && held && (
         <WalletSignalPanel held={held} emptyCount={emptyCount} />
