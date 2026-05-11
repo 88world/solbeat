@@ -260,3 +260,30 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Trump-tier easter egg. Fires when MarketPulse reads BPM ≥ 190, which
+   the heat math reserves for "the entire ecosystem is screaming." The
+   class is applied to <html> for ~2.2s, briefly tinting the whole page
+   in BV crimson + a hairline vignette. Pairs with a "🚨 Trump-tier
+   event" pip rendered above the BPM number. Rare by design — most
+   sessions will never see it. Memorable when it lands.
+   ──────────────────────────────────────────────────────────────────── */
+@keyframes solbeat-trump-flash {
+  0%   { box-shadow: inset 0 0 0 0 rgba(255, 71, 87, 0); }
+  20%  { box-shadow: inset 0 0 220px rgba(255, 71, 87, 0.35); }
+  100% { box-shadow: inset 0 0 0 0 rgba(255, 71, 87, 0); }
+}
+html.solbeat-trump-flash {
+  animation: solbeat-trump-flash 2.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes trump-pip-pulse {
+  0%, 100% {
+    box-shadow: 0 0 16px rgba(255, 71, 87, 0.45);
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(255, 71, 87, 0.85);
+    transform: translateX(-50%) scale(1.06);
+  }
+}

@@ -87,10 +87,17 @@ export function WalletProfileHero({
             )}
           </div>
 
-          {/* Address + copy button */}
-          <div className="flex items-center gap-2 flex-wrap mb-3">
-            <h1 className="text-[26px] sm:text-[34px] font-extrabold tracking-[-0.03em] leading-none text-mono">
-              {shortAddress(identity.address, 6, 6)}
+          {/* Address + copy button. On phones we drop two more chars
+              off each end so the address never wraps to two lines and
+              never overflows the card edge. */}
+          <div className="flex items-center gap-2 flex-wrap mb-3 min-w-0">
+            <h1 className="text-[22px] sm:text-[30px] lg:text-[34px] font-extrabold tracking-[-0.03em] leading-none text-mono min-w-0">
+              <span className="sm:hidden">
+                {shortAddress(identity.address, 4, 4)}
+              </span>
+              <span className="hidden sm:inline">
+                {shortAddress(identity.address, 6, 6)}
+              </span>
             </h1>
             <CopyButton onCopy={copy} />
             <a

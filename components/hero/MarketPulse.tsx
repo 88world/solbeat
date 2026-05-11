@@ -23,7 +23,9 @@ import { HeartWave } from "./HeartWave";
  */
 export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
   const [displayBpm, setDisplayBpm] = useState(55);
-  const [lastTick, setLastTick] = useState(Date.now());
+  // Lazy initializer — `Date.now()` is impure in render, but inside the
+  // `() => …` form it only fires once on mount, which is what we want.
+  const [lastTick, setLastTick] = useState(() => Date.now());
   const [secondsAgo, setSecondsAgo] = useState(0);
   const bpmRef = useRef<HTMLSpanElement>(null);
   const prevHeatRef = useRef(0);
@@ -85,6 +87,34 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
     }, 1000);
     return () => clearInterval(id);
   }, [lastTick]);
+
+  // ── Easter egg: Trump-tier event ──────────────────────────────────────
+  // When BPM crosses 190 (the ceiling the heat math now reserves for
+  // "the entire ecosystem is screaming") we fire a one-time page-wide
+  // pulse + a glowing badge near the BPM. The threshold is rare by
+  // design — heat=0.96+ requires SOL macro + breadth + volume + at least
+  // one parabolic launch all firing at once. When it triggers, the user
+  // remembers it. (Compare: "I was online when Trump released the coin.")
+  const [trumpTier, setTrumpTier] = useState(false);
+  const wasTrumpRef = useRef(false);
+  useEffect(() => {
+    const isTrump = displayBpm >= 190;
+    if (isTrump && !wasTrumpRef.current) {
+      wasTrumpRef.current = true;
+      setTrumpTier(true);
+      // Fire a page-wide flash by appending a CSS class to <html>. The
+      // class auto-removes after the keyframe completes so subsequent
+      // re-triggers (very rare) still fire.
+      const root = document.documentElement;
+      root.classList.add("solbeat-trump-flash");
+      setTimeout(() => root.classList.remove("solbeat-trump-flash"), 2200);
+    } else if (!isTrump && wasTrumpRef.current && displayBpm < 175) {
+      // Hysteresis: only un-arm once we've come back down below 175,
+      // so a 189 ↔ 190 oscillation doesn't strobe.
+      wasTrumpRef.current = false;
+      setTrumpTier(false);
+    }
+  }, [displayBpm]);
 
   if (!pulse) return <Skeleton />;
 
@@ -149,6 +179,22 @@ export function MarketPulse({ pulse }: { pulse: HeatSnapshot | null }) {
           heat={pulse.heat}
         />
       </div>
+
+      {/* Trump-tier banner. Only renders at BPM ≥ 190. */}
+      {trumpTier && (
+        <div
+          className="absolute top-2 left-1/2 -translate-x-1/2 z-30 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9.5px] font-black uppercase tracking-[0.22em]"
+          style={{
+            background: "rgba(255, 71, 87, 0.12)",
+            color: "#c1374a",
+            border: "1px solid rgba(255, 71, 87, 0.45)",
+            boxShadow: "0 0 16px rgba(255, 71, 87, 0.45)",
+            animation: "trump-pip-pulse 1.4s cubic-bezier(0.22,1,0.36,1) infinite",
+          }}
+        >
+          <span aria-hidden>🚨</span> Trump-tier event
+        </div>
+      )}
 
       {/* BPM hero row */}
       <div className="flex items-end gap-3 mb-3">

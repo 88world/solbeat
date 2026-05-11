@@ -195,7 +195,8 @@ export function LiveActivityFeed({
           "0 1px 0 rgba(255,255,255,0.08) inset, 0 6px 18px rgba(10, 10, 30, 0.05)",
       }}
     >
-      {/* LIVE pip on the left */}
+      {/* LIVE pip on the left. On phones the wordmark collapses so the
+          pip alone marks the banner, leaving room for the event text. */}
       <div className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-center gap-2 pointer-events-none">
         <span className="relative flex">
           <span
@@ -207,7 +208,7 @@ export function LiveActivityFeed({
             style={{ background: "#FF2D9C" }}
           />
         </span>
-        <span className="text-[9.5px] uppercase tracking-[0.22em] font-bold text-text-secondary">
+        <span className="hidden sm:inline text-[9.5px] uppercase tracking-[0.22em] font-bold text-text-secondary">
           Live wire {paused && <span className="opacity-60">· paused</span>}
         </span>
       </div>
@@ -219,8 +220,10 @@ export function LiveActivityFeed({
         </span>
       </div>
 
-      {/* Event content — rotates */}
-      <div className="pl-[110px] pr-[88px] py-3 min-h-[44px] flex items-center">
+      {/* Event content — rotates. Mobile gets a much tighter left pad
+          (just the pip width) since we dropped the "Live wire" label
+          on small screens. */}
+      <div className="pl-8 sm:pl-[110px] pr-4 sm:pr-[88px] py-3 min-h-[44px] flex items-center">
         <AnimatePresence mode="wait">
           {showPlaceholder ? (
             <motion.div

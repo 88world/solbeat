@@ -34,12 +34,41 @@ import { SignalPanel } from "@/components/token/SignalPanel";
 import { SwapPanel } from "@/components/token/SwapPanel";
 import { PulseTimeline } from "@/components/token/PulseTimeline";
 import { shortAddress } from "@/lib/utils";
+import { fetchBestSolanaPair } from "@/lib/data/dexscreener";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ ca: string }>;
 };
+
+/**
+ * Browser-tab + share-card title. We DON'T pull the full analysis here —
+ * just a single DexScreener call so /token/[ca] tabs show "$BONK · SolBeat"
+ * instead of the generic homepage title. Falls back to a truncated CA
+ * if the pair lookup fails so we always get *something* readable.
+ */
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { ca } = await params;
+  if (!isValidSolanaAddress(ca)) {
+    return { title: "Unknown token · SolBeat" };
+  }
+  const pair = await fetchBestSolanaPair(ca).catch(() => null);
+  const sym = pair?.baseToken?.symbol;
+  const name = pair?.baseToken?.name;
+  const titleSymbol = sym ? `$${sym.replace(/^\$/, "")}` : shortAddress(ca, 6, 6);
+  const title = `${titleSymbol} · SolBeat`;
+  const description = name
+    ? `Read the pulse of ${name} (${titleSymbol}). Real-time on-chain data, risk model, and AI synthesis.`
+    : "Real-time on-chain data, risk model, and AI synthesis on Solana.";
+  return {
+    title,
+    description,
+    openGraph: { title, description },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
 
 export default async function TokenPage({ params }: PageProps) {
   const { ca } = await params;

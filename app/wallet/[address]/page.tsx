@@ -1,12 +1,15 @@
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { isValidSolanaAddress } from "@/lib/solana/validation";
+import { shortAddress } from "@/lib/utils";
 import {
   fetchWalletIdentity,
   fetchWalletHoldings,
   fetchWalletActivity,
 } from "@/lib/data/wallet";
+import { smartMoneyName } from "@/lib/solana/classifier";
 import { TopNav } from "@/components/shared/TopNav";
 import { Aurora } from "@/components/shared/Aurora";
 import { CursorBlob } from "@/components/shared/CursorBlob";
@@ -21,6 +24,31 @@ export const dynamic = "force-dynamic";
 type PageProps = {
   params: Promise<{ address: string }>;
 };
+
+/**
+ * Dynamic browser-tab title. Smart-money wallets get their alias inline
+ * ("theo · SolBeat") so a quick scan of open tabs reads as identities
+ * rather than a wall of identical truncated base58. Everyone else gets
+ * the short address.
+ */
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { address } = await params;
+  if (!isValidSolanaAddress(address)) {
+    return { title: "Wallet · SolBeat" };
+  }
+  const alias = smartMoneyName(address);
+  const titleLead = alias ?? shortAddress(address, 6, 6);
+  const title = `${titleLead} · wallet · SolBeat`;
+  const description = alias
+    ? `Public on-chain profile for ${alias}: holdings, activity, smart-money signals.`
+    : "Public on-chain wallet profile: holdings, activity, smart-money signals.";
+  return {
+    title,
+    description,
+    openGraph: { title, description },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
 
 /**
  * Public wallet profile. Anyone can paste any address and see:
