@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { VersionedTransaction } from "@solana/web3.js";
 
 /**
@@ -26,7 +26,6 @@ export type ReclaimStatus =
 
 export function useReclaim(scan: ReclaimScan | null) {
   const { publicKey, signAllTransactions } = useWallet();
-  const { connection } = useConnection();
   const [status, setStatus] = useState<ReclaimStatus | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -92,13 +91,39 @@ export function useReclaim(scan: ReclaimScan | null) {
       const signed = await signAllTransactions(txs);
 
       setStatus({ kind: "info", text: "Submitting to chain…" });
-      const sigs: string[] = [];
-      for (const tx of signed) {
-        const sig = await connection.sendRawTransaction(tx.serialize(), {
-          skipPreflight: false,
+      // Submit via /api/reclaim/submit which routes through Helius — same
+      // RPC the build endpoint used to fetch the blockhash. The wallet
+      // adapter's own `connection` falls back to the public mainnet-beta
+      // RPC, which lags Helius by several slots and reliably rejects our
+      // blockhash as "not found" before the tx reaches a validator.
+      const submitRes = await fetch("/api/reclaim/submit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          signed: signed.map((tx) =>
+            Buffer.from(tx.serialize()).toString("base64"),
+          ),
+        }),
+      });
+      if (!submitRes.ok) {
+        const errBody = (await submitRes.json().catch(() => ({}))) as {
+          error?: string;
+          errors?: Array<{ message: string }>;
+        };
+        const first = errBody.errors?.[0]?.message ?? errBody.error ?? "unknown";
+        // Blockhash-expired is the recoverable one — telling the user to
+        // just click again works because the next build will pull a fresh
+        // blockhash. Phrased explicitly so the path forward is obvious.
+        const stale = /blockhash|expired|not found/i.test(first);
+        setStatus({
+          kind: "err",
+          text: stale
+            ? "Transaction expired before it landed (Solana blockhashes are valid for ~60s). Click Reclaim again — a fresh batch will be built."
+            : `Submission failed: ${first.slice(0, 160)}`,
         });
-        sigs.push(sig);
+        return;
       }
+      const { sigs } = (await submitRes.json()) as { sigs: string[] };
       setStatus({
         kind: "ok",
         text: `Reclaimed ${scan.user_receives_sol.toFixed(4)} SOL across ${sigs.length} batch${
