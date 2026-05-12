@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { animate } from "animejs";
+import { useReclaim } from "@/lib/solana/use-reclaim";
+import { ReclaimStatusBanner } from "./ReclaimStatusBanner";
 
 type ScanResult = {
   address: string;
@@ -10,6 +12,7 @@ type ScanResult = {
   fee_sol: number;
   user_receives_sol: number;
   fee_bps: number;
+  accounts: Array<{ pubkey: string }>;
 };
 
 /**
@@ -29,12 +32,20 @@ export function HiddenSolHero({
   onJump,
 }: {
   address: string;
-  /** Called when the user clicks the CTA. Parent should switch to the reclaim tab. */
+  /** Called when the user clicks the CTA. Parent should switch to the reclaim tab
+   *  so the dead-accounts list is visible after the reclaim completes. */
   onJump: () => void;
 }) {
   const [scan, setScan] = useState<ScanResult | null>(null);
   const numberRef = useRef<HTMLSpanElement>(null);
   const lastDisplayedRef = useRef(0);
+  // The hero CTA used to *only* switch tabs — meaning a user clicking the
+  // loud gradient "Reclaim now →" got zero on-chain action, just a quiet
+  // tab swap they often didn't notice. The fix is to run the actual
+  // reclaim from this surface directly. We still call onJump() so the
+  // dead-accounts list scrolls into view, but the chain action is owned
+  // here, not deferred to a second button below.
+  const { status, submitting, reclaim } = useReclaim(scan);
 
   useEffect(() => {
     if (!address) return;
@@ -186,14 +197,20 @@ export function HiddenSolHero({
 
         <button
           type="button"
-          onClick={onJump}
+          onClick={() => {
+            // Switch to the dead-accounts tab in parallel so the user can
+            // watch the list shrink as batches confirm, then fire reclaim.
+            onJump();
+            void reclaim();
+          }}
+          disabled={submitting}
           // Reclaim CTA — static brand gradient (no wipe) so the surface
           // reads as a confident premium object, not a busy ad. Aliveness
           // comes from the breathing pink glow halo (heartbeat cadence
           // matching the rest of the brand) drawn as a separate ::after
           // layer behind the button. Hover scales the whole thing, the
           // glow intensifies, and the arrow nudges 2px right.
-          className="reclaim-cta group relative shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13.5px] font-bold text-white transition-transform hover:scale-[1.04] active:scale-[0.97]"
+          className="reclaim-cta group relative shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13.5px] font-bold text-white transition-transform hover:scale-[1.04] active:scale-[0.97] disabled:opacity-70 disabled:cursor-wait disabled:hover:scale-100"
           style={{
             background:
               "linear-gradient(110deg, #FF2D9C 0%, #5E5CFF 60%, #14F195 110%)",
@@ -225,7 +242,9 @@ export function HiddenSolHero({
                 "radial-gradient(120% 60% at 30% 30%, rgba(255,255,255,0.22) 0%, transparent 60%)",
             }}
           />
-          <span className="relative">Reclaim now</span>
+          <span className="relative">
+            {submitting ? "Working…" : "Reclaim now"}
+          </span>
           <span
             aria-hidden
             className="relative text-[14px] transition-transform group-hover:translate-x-0.5"
@@ -234,6 +253,15 @@ export function HiddenSolHero({
           </span>
         </button>
       </div>
+
+      {/* Banner only mounts once the user has clicked once. Sits inside
+          the hero card so the visual relationship to the CTA is obvious
+          — no "where did the feedback go" hunt across the page. */}
+      {status && (
+        <div className="px-6 pb-5 -mt-1">
+          <ReclaimStatusBanner status={status} />
+        </div>
+      )}
     </div>
   );
 }

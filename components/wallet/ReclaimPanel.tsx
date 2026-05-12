@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { VersionedTransaction } from "@solana/web3.js";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { FEES } from "@/config/constants";
+import { useReclaim } from "@/lib/solana/use-reclaim";
+import { ReclaimStatusBanner } from "./ReclaimStatusBanner";
 
 type ReclaimAccount = {
   pubkey: string;
@@ -25,19 +26,10 @@ type ScanResult = {
 };
 
 export function ReclaimPanel() {
-  const { publicKey, signAllTransactions } = useWallet();
-  const { connection } = useConnection();
+  const { publicKey } = useWallet();
   const [data, setData] = useState<ScanResult | null>(null);
   const [loading, setLoading] = useState(false);
-  // Status feedback is rendered as a colored banner below the CTA so a
-  // failed click can never feel like "nothing happened" — every branch
-  // (info/ok/err) gets its own hue, and the error path includes enough
-  // context for the user to know *why* (most commonly: treasury env var
-  // missing on the deployment).
-  const [status, setStatus] = useState<
-    { kind: "info" | "ok" | "err"; text: string; sig?: string } | null
-  >(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { status, submitting, reclaim } = useReclaim(data);
 
   // Detect live-fee mode at mount. The treasury wallet is a NEXT_PUBLIC_*
   // env so it's available client-side; if it's set the build endpoint
@@ -70,82 +62,6 @@ export function ReclaimPanel() {
       cancelled = true;
     };
   }, [publicKey]);
-
-  const reclaim = async () => {
-    if (!publicKey || !signAllTransactions || !data) return;
-    setSubmitting(true);
-    setStatus({ kind: "info", text: "Building transactions…" });
-    try {
-      const r = await fetch("/api/reclaim/build", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          owner: publicKey.toBase58(),
-          accounts: data.accounts.map((a) => a.pubkey),
-        }),
-      });
-      if (!r.ok) {
-        const err = (await r.json().catch(() => ({}))) as { error?: string };
-        if (err.error === "treasury_unconfigured") {
-          setStatus({
-            kind: "err",
-            text: "Reclaim is paused on this deployment — the treasury wallet env var (NEXT_PUBLIC_BV_TREASURY_WALLET) isn't set on the server. Add a base58 Solana address in Vercel → Settings → Environment Variables and redeploy.",
-          });
-        } else {
-          setStatus({
-            kind: "err",
-            text: `Build failed (${err.error ?? "unknown"}). Try again or refresh the page.`,
-          });
-        }
-        return;
-      }
-      const { batches } = (await r.json()) as {
-        batches: Array<{ account_count: number; transaction: string }>;
-      };
-      const txs = batches.map((b) => {
-        const buf = Uint8Array.from(atob(b.transaction), (c) => c.charCodeAt(0));
-        return VersionedTransaction.deserialize(buf);
-      });
-
-      setStatus({
-        kind: "info",
-        text: `Sign ${txs.length} batch${txs.length === 1 ? "" : "es"} in your wallet…`,
-      });
-      const signed = await signAllTransactions(txs);
-
-      setStatus({ kind: "info", text: "Submitting to chain…" });
-      const sigs: string[] = [];
-      for (const tx of signed) {
-        const sig = await connection.sendRawTransaction(tx.serialize(), {
-          skipPreflight: false,
-        });
-        sigs.push(sig);
-      }
-      setStatus({
-        kind: "ok",
-        text: `Reclaimed ${data.user_receives_sol.toFixed(4)} SOL across ${sigs.length} batch${
-          sigs.length === 1 ? "" : "es"
-        }.`,
-        sig: sigs[0],
-      });
-    } catch (err) {
-      console.error(err);
-      // Phantom + most wallet adapters surface user rejection as a thrown
-      // error with code 4001 or a message containing "reject". Treat that
-      // as a soft cancel, not a failure, so the user doesn't read it as
-      // "the app broke" when they just hit Cancel in the wallet popup.
-      const msg = err instanceof Error ? err.message : String(err);
-      const rejected = /reject|denied|user/i.test(msg);
-      setStatus({
-        kind: rejected ? "info" : "err",
-        text: rejected
-          ? "Cancelled in wallet. No SOL was moved."
-          : `Reclaim failed: ${msg.slice(0, 140)}`,
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   if (!publicKey) {
     return (
@@ -250,62 +166,6 @@ export function ReclaimPanel() {
           ))}
         </ul>
       </div>
-    </div>
-  );
-}
-
-/**
- * Color-coded status banner. The previous version was 12px grey body text
- * tucked under the button — clicks that 500'd silently looked like nothing
- * happened. Now: yellow for in-flight info, green for success (with a
- * Solscan link when we have a sig), red for hard errors. The treasury-not-
- * configured case spells out the exact env var to set and where, because
- * it's the most common deploy-time pitfall.
- */
-function ReclaimStatusBanner({
-  status,
-}: {
-  status: { kind: "info" | "ok" | "err"; text: string; sig?: string };
-}) {
-  const palette =
-    status.kind === "ok"
-      ? {
-          bg: "rgba(20, 241, 149, 0.10)",
-          border: "rgba(20, 241, 149, 0.32)",
-          color: "var(--signal-positive)",
-        }
-      : status.kind === "err"
-        ? {
-            bg: "rgba(255, 71, 87, 0.10)",
-            border: "rgba(255, 71, 87, 0.32)",
-            color: "var(--signal-negative)",
-          }
-        : {
-            bg: "rgba(255, 165, 2, 0.10)",
-            border: "rgba(255, 165, 2, 0.32)",
-            color: "var(--signal-warning)",
-          };
-  return (
-    <div
-      className="mt-4 rounded-xl px-4 py-3 text-[13px] leading-relaxed"
-      style={{
-        background: palette.bg,
-        border: `1px solid ${palette.border}`,
-        color: palette.color,
-      }}
-      role={status.kind === "err" ? "alert" : "status"}
-    >
-      <div className="font-bold">{status.text}</div>
-      {status.sig && (
-        <a
-          href={`https://solscan.io/tx/${status.sig}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 inline-block text-[12px] underline opacity-90 hover:opacity-100 text-mono"
-        >
-          View on Solscan ↗ {status.sig.slice(0, 8)}…
-        </a>
-      )}
     </div>
   );
 }
